@@ -30,6 +30,7 @@ namespace RecompressPng
                 File.Delete(dstZipFile);
             }
 
+            int nProcPngFiles = 0;
             var totalSw = Stopwatch.StartNew();
             using (var srcArchive = ZipFile.OpenRead(srcZipFile))
             using (var dstArchive = ZipFile.Open(dstZipFile, ZipArchiveMode.Update))
@@ -71,6 +72,7 @@ namespace RecompressPng
                             }
                             // Keep original timestamp
                             dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                            nProcPngFiles++;
                         }
 
                         Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms {ToMiB(data.Length):F3} MB -> {ToMiB(compressedData.Length):F3} MB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
@@ -80,7 +82,8 @@ namespace RecompressPng
             var srcFileSize = new FileInfo(srcZipFile).Length;
             var dstFileSize = new FileInfo(dstZipFile).Length;
 
-            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MB -> {ToMiB(dstFileSize):F3} MB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MB -> {ToMiB(dstFileSize):F3} MB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
 
             MoveFileForce(
                 srcZipFile,
