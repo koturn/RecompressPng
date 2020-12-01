@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using LibZopfliSharp;
@@ -8,7 +9,7 @@ namespace RecompressPng
 {
     class Program
     {
-        static int Main(string[] args)
+        private static int Main(string[] args)
         {
             if (args.Length == 0)
             {
@@ -24,6 +25,7 @@ namespace RecompressPng
                 File.Delete(dstZipFile);
             }
 
+            var totalSw = Stopwatch.StartNew();
             using (var srcArchive = ZipFile.OpenRead(srcZipFile))
             using (var dstArchive = ZipFile.Open(dstZipFile, ZipArchiveMode.Update))
             {
@@ -35,6 +37,8 @@ namespace RecompressPng
                         continue;
                     }
                     Console.WriteLine($"Compress {srcEntry.FullName} ...");
+
+                    var sw = Stopwatch.StartNew();
                     byte[] data;
                     using (var ms = new MemoryStream(4 * 1024 * 1024))
                     {
@@ -53,9 +57,10 @@ namespace RecompressPng
                     }
                     dstEntry.LastWriteTime = srcEntry.LastWriteTime;
 
-                    Console.WriteLine($"Done");
+                    Console.WriteLine($"Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds} ms");
                 }
             }
+            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds} ms");
 
             MoveFileForce(
                 srcZipFile,
@@ -67,7 +72,7 @@ namespace RecompressPng
             return 0;
         }
 
-        static void MoveFileForce(string srcFileName, string dstFileName)
+        private static void MoveFileForce(string srcFileName, string dstFileName)
         {
             if (File.Exists(dstFileName))
             {
