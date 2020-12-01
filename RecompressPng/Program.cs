@@ -73,10 +73,14 @@ namespace RecompressPng
                             dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                         }
 
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms");
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms {ToMiB(data.Length):F3} MB -> {ToMiB(compressedData.Length):F3} MB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                     });
             }
-            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms");
+
+            var srcFileSize = new FileInfo(srcZipFile).Length;
+            var dstFileSize = new FileInfo(dstZipFile).Length;
+
+            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MB -> {ToMiB(dstFileSize):F3} MB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
 
             MoveFileForce(
                 srcZipFile,
@@ -95,6 +99,16 @@ namespace RecompressPng
                 File.Delete(dstFileName);
             }
             File.Move(srcFileName, dstFileName);
+        }
+
+        private static double ToMiB(long byteSize)
+        {
+            return (double)byteSize / 1024.0 / 1024.0;
+        }
+
+        private static double CalcDeflatedRate(long originalSize, long compressedSize)
+        {
+            return 1.0 - (double)compressedSize / (double)originalSize;
         }
     }
 }
