@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using LibZopfliSharp;
@@ -35,47 +36,45 @@ namespace RecompressPng
             {
                 var srcLock = new object();
                 var dstLock = new object();
-                Parallel.ForEach(srcArchive.Entries, new ParallelOptions() { MaxDegreeOfParallelism = -1 }, srcEntry =>
-                {
-                    if (!srcEntry.FullName.EndsWith(".png"))
+                Parallel.ForEach(
+                    srcArchive.Entries.Where(entry => entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)),
+                    new ParallelOptions() { MaxDegreeOfParallelism = -1 },
+                    srcEntry =>
                     {
-                        return;
-                    }
+                        var sw = Stopwatch.StartNew();
 
-                    var sw = Stopwatch.StartNew();
+                        var threadId = Thread.CurrentThread.ManagedThreadId;
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} ...");
 
-                    var threadId = Thread.CurrentThread.ManagedThreadId;
-                    Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} ...");
-
-                    byte[] data;
-                    using (var ms = new MemoryStream(DefaultReadCapacitySize))
-                    {
-                        lock (srcLock)
+                        byte[] data;
+                        using (var ms = new MemoryStream(DefaultReadCapacitySize))
                         {
-                            using (var srcZs = srcEntry.Open())
+                            lock (srcLock)
                             {
-                                srcZs.CopyTo(ms);
+                                using (var srcZs = srcEntry.Open())
+                                {
+                                    srcZs.CopyTo(ms);
+                                }
                             }
+                            data = ms.ToArray();
                         }
-                        data = ms.ToArray();
-                    }
 
-                    // Take a long time
-                    var compressedData = ZopfliPNG.compress(data);
+                        // Take a long time
+                        var compressedData = ZopfliPNG.compress(data);
 
-                    lock (dstLock)
-                    {
-                        var dstEntry = dstArchive.CreateEntry(srcEntry.FullName);
-                        using (var dstZs = dstEntry.Open())
+                        lock (dstLock)
                         {
-                            dstZs.Write(compressedData, 0, compressedData.Length);
+                            var dstEntry = dstArchive.CreateEntry(srcEntry.FullName);
+                            using (var dstZs = dstEntry.Open())
+                            {
+                                dstZs.Write(compressedData, 0, compressedData.Length);
+                            }
+                            // Keep original timestamp
+                            dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                         }
-                        // Keep original timestamp
-                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
-                    }
 
-                    Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms");
-                });
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms");
+                    });
             }
             Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms");
 
