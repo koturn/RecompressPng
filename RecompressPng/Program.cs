@@ -2,6 +2,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Threading;
+using System.Threading.Tasks;
 using LibZopfliSharp;
 
 
@@ -9,6 +11,8 @@ namespace RecompressPng
 {
     class Program
     {
+        const int DefaultReadCapacitySize = 4 * 1024 * 1024;
+
         private static int Main(string[] args)
         {
             if (args.Length == 0)
@@ -29,38 +33,51 @@ namespace RecompressPng
             using (var srcArchive = ZipFile.OpenRead(srcZipFile))
             using (var dstArchive = ZipFile.Open(dstZipFile, ZipArchiveMode.Update))
             {
-                foreach (var srcEntry in srcArchive.Entries)
+                var srcLock = new object();
+                var dstLock = new object();
+                Parallel.ForEach(srcArchive.Entries, new ParallelOptions() { MaxDegreeOfParallelism = -1 }, srcEntry =>
                 {
                     if (!srcEntry.FullName.EndsWith(".png"))
                     {
-                        Console.WriteLine($"Non target: {srcEntry.FullName}");
-                        continue;
+                        return;
                     }
-                    Console.WriteLine($"Compress {srcEntry.FullName} ...");
 
                     var sw = Stopwatch.StartNew();
+
+                    var threadId = Thread.CurrentThread.ManagedThreadId;
+                    Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} ...");
+
                     byte[] data;
-                    using (var ms = new MemoryStream(4 * 1024 * 1024))
+                    using (var ms = new MemoryStream(DefaultReadCapacitySize))
                     {
-                        using (var srcZs = srcEntry.Open())
+                        lock (srcLock)
                         {
-                            srcZs.CopyTo(ms);
+                            using (var srcZs = srcEntry.Open())
+                            {
+                                srcZs.CopyTo(ms);
+                            }
                         }
                         data = ms.ToArray();
                     }
 
-                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName);
-                    using (var dstZs = dstEntry.Open())
-                    using (var zopfliStream = new ZopfliPNGStream(dstZs))
-                    {
-                        zopfliStream.Write(data, 0, data.Length);
-                    }
-                    dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                    // Take a long time
+                    var compressedData = ZopfliPNG.compress(data);
 
-                    Console.WriteLine($"Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds} ms");
-                }
+                    lock (dstLock)
+                    {
+                        var dstEntry = dstArchive.CreateEntry(srcEntry.FullName);
+                        using (var dstZs = dstEntry.Open())
+                        {
+                            dstZs.Write(compressedData, 0, compressedData.Length);
+                        }
+                        // Keep original timestamp
+                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                    }
+
+                    Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms");
+                });
             }
-            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds} ms");
+            Console.WriteLine($"All PNG file was proccessed. Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms");
 
             MoveFileForce(
                 srcZipFile,
