@@ -11,10 +11,21 @@ using LibZopfliSharp;
 
 namespace RecompressPng
 {
+    /// <summary>
+    /// PNG re-compression using "zopfli" algorithm.
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// Default capacity for <see cref="MemoryStream"/> to read zip archive entries.
+        /// </summary>
         const int DefaultReadCapacitySize = 4 * 1024 * 1024;
 
+        /// <summary>
+        /// An entry point of this program.
+        /// </summary>
+        /// <param name="args">Command-line arguments.</param>
+        /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
             if (args.Length == 0)
@@ -48,6 +59,11 @@ namespace RecompressPng
             return 0;
         }
 
+        /// <summary>
+        /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
+        /// </summary>
+        /// <param name="srcZipFilePath">Source zip archive file.</param>
+        /// <param name="dstZipFilePath">Destination zip archive file.</param>
         private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath = null)
         {
             if (dstZipFilePath == null)
@@ -106,7 +122,7 @@ namespace RecompressPng
                             nProcPngFiles++;
                         }
 
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MB -> {ToMiB(compressedData.Length):F3} MB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -114,7 +130,7 @@ namespace RecompressPng
             var dstFileSize = new FileInfo(dstZipFilePath).Length;
 
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MB -> {ToMiB(dstFileSize):F3} MB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
 
             MoveFileForce(
                 srcZipFilePath,
@@ -124,7 +140,11 @@ namespace RecompressPng
                 Path.Combine(Path.GetDirectoryName(dstZipFilePath), Path.GetFileNameWithoutExtension(dstZipFilePath)));
         }
 
-
+        /// <summary>
+        /// Re-compress all PNG files in directory using "zopfli" algorithm.
+        /// </summary>
+        /// <param name="srcZipFilePath">Source directory.</param>
+        /// <param name="dstZipFilePath">Destination directory.</param>
         private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath = null)
         {
             if (dstDirPath == null)
@@ -178,11 +198,11 @@ namespace RecompressPng
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
                     Interlocked.Increment(ref nProcPngFiles);
 
-                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MB -> {ToMiB(compressedData.Length):F3} MB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcTotalFileSize):F3} MB -> {ToMiB(dstTotalFileSize):F3} MB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
 
             MoveDirectoryForce(
                 srcDirPath,
@@ -192,6 +212,12 @@ namespace RecompressPng
                 Path.Combine(Path.GetDirectoryName(dstDirPath), Path.GetFileNameWithoutExtension(dstDirPath)));
         }
 
+        /// <summary>
+        /// <para>Identify zip archive file or not.</para>
+        /// <para>Just determine if the first two bytes are 'P' and 'K'.</para>
+        /// </summary>
+        /// <param name="zipFilePath">Target zip file path,</param>
+        /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
         private static bool IsZipFile(string zipFilePath)
         {
             var buffer = new byte[2];
@@ -202,33 +228,53 @@ namespace RecompressPng
             return buffer[0] == 'P' && buffer[1] == 'K';
         }
 
-
-        private static void MoveFileForce(string srcFileName, string dstFileName)
+        /// <summary>
+        /// Move the file, but do delete if the destination file exists.
+        /// </summary>
+        /// <param name="srcFilePath">Source file path.</param>
+        /// <param name="dstFilePath">Destination file path,</param>
+        private static void MoveFileForce(string srcFilePath, string dstFilePath)
         {
-            if (File.Exists(dstFileName))
+            if (File.Exists(dstFilePath))
             {
-                File.Delete(dstFileName);
+                File.Delete(dstFilePath);
             }
-            File.Move(srcFileName, dstFileName);
+            File.Move(srcFilePath, dstFilePath);
         }
 
-        private static void MoveDirectoryForce(string srcFileName, string dstFileName)
+        /// <summary>
+        /// Move the directory, but do delete if the destination directory exists.
+        /// </summary>
+        /// <param name="srcFilePath">Source directory path.</param>
+        /// <param name="dstFilePath">Destination directory path,</param>
+        private static void MoveDirectoryForce(string srcDirPath, string dstDirPath)
         {
-            if (Directory.Exists(dstFileName))
+            if (Directory.Exists(dstDirPath))
             {
-                Directory.Delete(dstFileName);
+                Directory.Delete(dstDirPath);
             }
-            Directory.Move(srcFileName, dstFileName);
+            Directory.Move(srcDirPath, dstDirPath);
         }
 
+        /// <summary>
+        /// Converts a number in bytes to a number in MiB.
+        /// </summary>
+        /// <param name="byteSize">A number in bytes.</param>
+        /// <returns>A number in MiB.</returns>
         private static double ToMiB(long byteSize)
         {
-            return (double)byteSize / 1024.0 / 1024.0;
+            return byteSize / 1024.0 / 1024.0;
         }
 
+        /// <summary>
+        /// Calculate deflated rate.
+        /// </summary>
+        /// <param name="originalSize">Original size.</param>
+        /// <param name="compressedSize">Compressed size.</param>
+        /// <returns>Deflated rete.</returns>
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
-            return 1.0 - (double)compressedSize / (double)originalSize;
+            return 1.0 - (double)compressedSize / originalSize;
         }
     }
 }
