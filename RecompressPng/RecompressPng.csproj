@@ -83,5 +83,11 @@
       <Version>1.0.14325.1</Version>
     </PackageReference>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ArgumentParserNetStd\ArgumentParserNetStd.csproj">
+      <Project>{5a9465f9-4ead-4d52-84c3-5d673fda739f}</Project>
+      <Name>ArgumentParserNetStd</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

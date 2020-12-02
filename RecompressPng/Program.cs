@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using ArgumentParserNetStd;
 using LibZopfliSharp;
 
 
@@ -31,27 +32,23 @@ namespace RecompressPng
         /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
-            if (args.Length == 0)
-            {
-                Console.Error.WriteLine("Please specify target zip file");
-                return 1;
-            }
+            var (target, zo, nThreads) = ParseCommadLineArguments(args);
 
-            if (File.Exists(args[0]))
+            if (File.Exists(target))
             {
-                if (!IsZipFile(args[0]))
+                if (!IsZipFile(target))
                 {
                     Console.Error.WriteLine("Specified file is not zip archive");
                     return 1;
                 }
                 else
                 {
-                    RecompressPngInZipArchive(args[0]);
+                    RecompressPngInZipArchive(target, null, zo, nThreads);
                 }
             }
-            else if (Directory.Exists(args[0]))
+            else if (Directory.Exists(target))
             {
-                RecompressPngInDirectory(args[0]);
+                RecompressPngInDirectory(target, null, zo, nThreads);
             }
             else
             {
@@ -63,11 +60,97 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Parse command line arguments and retrieve the result.
+        /// </summary>
+        /// <param name="args">Command-line arguments</param>
+        /// <returns>Parse result tuple.</returns>
+        private static (string Target, ZopfliPNGOptions CompressOption, int NumberOfThreads) ParseCommadLineArguments(string[] args)
+        {
+            var ap = new ArgumentParser()
+            {
+                Description = "<<< PNG Re-compressor using zopflipng >>>"
+            };
+            ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", 15);
+            ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", 5);
+            ap.Add('s', "strategies", OptionType.RequiredArgument,
+                "Filter strategies to try\n"
+                + ap.IndentString + ap.IndentString + "0: Strategy Zero\n"
+                + ap.IndentString + ap.IndentString + "1: Strategy One\n"
+                + ap.IndentString + ap.IndentString + "2: Strategy Two\n"
+                + ap.IndentString + ap.IndentString + "3: Strategy Three\n"
+                + ap.IndentString + ap.IndentString + "4: Strategy Four\n"
+                + ap.IndentString + ap.IndentString + "5: Strategy Min, Sum.\n"
+                + ap.IndentString + ap.IndentString + "6: Strategy Entropy\n"
+                + ap.IndentString + ap.IndentString + "7: Strategy Predefined\n"
+                + ap.IndentString + ap.IndentString + "8: Strategy Brute Force"
+                , "[0|1|2|3|4|5|6|7|8],...");
+            ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
+            ap.Add("lossy-transparent", "Allow altering hidden colors of fully transparent pixels.");
+            ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
+            ap.Add("no-auto-filter-strategy", OptionType.RequiredArgument, "Automatically choose filter strategy using less good compression.", "NUM", true);
+            ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
+            ap.AddHelp();
+
+            ap.Parse(args);
+
+            if (ap.Get<bool>('h'))
+            {
+                ap.ShowUsage();
+                Environment.Exit(0);
+            }
+
+            var targets = ap.Arguments;
+            if (targets.Count == 0)
+            {
+                Console.Error.WriteLine("Please specify one zip file or directory.");
+                Environment.Exit(0);
+            }
+            else if (targets.Count > 1)
+            {
+                Console.Error.WriteLine("Target zip file or directory must be one.");
+                Console.Error.WriteLine("Proccess first argument: " + targets[0]);
+            }
+
+            var zo = new ZopfliPNGOptions()
+            {
+                num_iterations = ap.Get<int>('i'),
+                num_iterations_large = ap.Get<int>('I')
+            };
+            if (ap.Exists('s'))
+            {
+                zo.filter_strategies = ap.Get('s')
+                    .Split(',')
+                    .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token))
+                    .ToArray();
+            }
+            if (ap.Exists("lossy-transparent"))
+            {
+                zo.lossy_transparent = true;
+            }
+            if (ap.Exists("lossy-8bit"))
+            {
+                zo.lossy_8bit = true;
+            }
+            if (ap.Exists("no-auto-filter-strategy"))
+            {
+                zo.use_zopfli = false;
+            }
+            if (ap.Exists("no-use-zopfli"))
+            {
+                zo.use_zopfli = false;
+            }
+
+            return (targets[0], zo, ap.Get<int>('n'));
+        }
+
+        /// <summary>
         /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
         /// </summary>
         /// <param name="srcZipFilePath">Source zip archive file.</param>
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath = null)
+        /// <param name="zo">Options for zopflipng.</param>
+        /// <param name="nThreads">Number of threads for re-compressing.</param>
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions zo, int nThreads)
         {
             if (dstZipFilePath == null)
             {
@@ -90,7 +173,7 @@ namespace RecompressPng
                 var dstLock = new object();
                 Parallel.ForEach(
                     srcArchive.Entries.Where(entry => entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)),
-                    new ParallelOptions() { MaxDegreeOfParallelism = -1 },
+                    new ParallelOptions() { MaxDegreeOfParallelism = nThreads },
                     srcEntry =>
                     {
                         var sw = Stopwatch.StartNew();
@@ -112,7 +195,7 @@ namespace RecompressPng
                         }
 
                         // Take a long time
-                        var compressedData = ZopfliPNG.compress(data);
+                        var compressedData = ZopfliPNG.compress(data, zo);
 
                         lock (dstLock)
                         {
@@ -164,9 +247,11 @@ namespace RecompressPng
         /// <summary>
         /// Re-compress all PNG files in directory using "zopfli" algorithm.
         /// </summary>
-        /// <param name="srcZipFilePath">Source directory.</param>
-        /// <param name="dstZipFilePath">Destination directory.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath = null)
+        /// <param name="srcDirPath">Source directory.</param>
+        /// <param name="dstDirPath">Destination directory.</param>
+        /// <param name="zo">Options for zopflipng.</param>
+        /// <param name="nThreads">Number of threads for re-compressing.</param>
+        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions zo, int nThreads)
         {
             if (dstDirPath == null)
             {
@@ -190,7 +275,7 @@ namespace RecompressPng
 
             Parallel.ForEach(
                 Directory.EnumerateFiles(srcDirPath, "*.png", SearchOption.AllDirectories),
-                new ParallelOptions() { MaxDegreeOfParallelism = -1 },
+                new ParallelOptions() { MaxDegreeOfParallelism = nThreads },
                 srcFilePath =>
                 {
                     var sw = Stopwatch.StartNew();
@@ -209,7 +294,7 @@ namespace RecompressPng
                     var data = File.ReadAllBytes(srcFilePath);
 
                     // Take a long time
-                    var compressedData = ZopfliPNG.compress(data);
+                    var compressedData = ZopfliPNG.compress(data, zo);
 
                     File.WriteAllBytes(dstFilePath, compressedData);
 
