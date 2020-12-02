@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -78,6 +80,7 @@ namespace RecompressPng
 
 
             int nProcPngFiles = 0;
+            int nSameImages = 0;
             var totalSw = Stopwatch.StartNew();
             using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
             using (var dstArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
@@ -122,7 +125,16 @@ namespace RecompressPng
                             nProcPngFiles++;
                         }
 
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                        // The comparison of image data is considered to take a little longer.
+                        // Therefore, atomically incremented nSameImages outside of the lock statement.
+                        var isSameImage = CompareImage(data, compressedData);
+                        if (isSameImage)
+                        {
+                            Interlocked.Increment(ref nSameImages);
+                        }
+
+                        var verifyResultMsg = isSameImage ? "same image" : "different image";
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -131,6 +143,14 @@ namespace RecompressPng
 
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            if (nProcPngFiles == nSameImages)
+            {
+                Console.WriteLine("All the image data before and after re-compressing are the same.");
+            }
+            else
+            {
+                Console.WriteLine($"{nSameImages} / {nProcPngFiles} PNG files are different image.");
+            }
 
             MoveFileForce(
                 srcZipFilePath,
@@ -164,6 +184,7 @@ namespace RecompressPng
             var dstTotalFileSize = 0L;
 
             int nProcPngFiles = 0;
+            int nSameImages = 0;
             var totalSw = Stopwatch.StartNew();
 
             Parallel.ForEach(
@@ -198,11 +219,26 @@ namespace RecompressPng
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
                     Interlocked.Increment(ref nProcPngFiles);
 
-                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    var isSameImage = CompareImage(data, compressedData);
+                    if (isSameImage)
+                    {
+                        Interlocked.Increment(ref nSameImages);
+                    }
+
+                    var verifyResultMsg = isSameImage ? "same image" : "different image";
+                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
+            if (nProcPngFiles == nSameImages)
+            {
+                Console.WriteLine("All the image data before and after re-compressing are the same.");
+            }
+            else
+            {
+                Console.WriteLine($"{nSameImages} / {nProcPngFiles} PNG files are different image.");
+            }
 
             MoveDirectoryForce(
                 srcDirPath,
@@ -275,6 +311,87 @@ namespace RecompressPng
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
             return 1.0 - (double)compressedSize / originalSize;
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
+        /// <param name="imgData1">First image data.</param>
+        /// <param name="imgData2">Second image data.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static bool CompareImage(byte[] imgData1, byte[] imgData2)
+        {
+            return CompareImage(
+                CreateBitmapFromByteArray(imgData1),
+                CreateBitmapFromByteArray(imgData2));
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
+        /// <param name="img1">First image data.</param>
+        /// <param name="img2">Second image data.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static bool CompareImage(Bitmap img1, Bitmap img2)
+        {
+            if (img1.Width != img2.Width)
+            {
+                return false;
+            }
+            if (img1.Height != img2.Height)
+            {
+                return false;
+            }
+            if (img1.PixelFormat != img2.PixelFormat)
+            {
+                return false;
+            }
+
+            var bd1 = img1.LockBits(
+                new Rectangle(0, 0, img1.Width, img1.Height),
+                ImageLockMode.ReadWrite,
+                img1.PixelFormat);
+            var bd2 = img2.LockBits(
+                new Rectangle(0, 0, img2.Width, img2.Height),
+                ImageLockMode.ReadWrite,
+                img2.PixelFormat);
+
+            if (bd1.Stride != bd2.Stride)
+            {
+                return false;
+            }
+
+            unsafe
+            {
+                var p1 = (byte*)bd1.Scan0;
+                var p2 = (byte*)bd2.Scan0;
+                var img1ByteLength = bd1.Stride * bd1.Height;
+                for (int i = 0; i < img1ByteLength; i++)
+                {
+                    if (p1[i] != p2[i])
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            img2.UnlockBits(bd2);
+            img1.UnlockBits(bd1);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Convert <see cref="Bitmap"/> instance from image data.
+        /// </summary>
+        /// <param name="imgData">Image data.</param>
+        /// <returns><see cref="Bitmap"/> instance.</returns>
+        private static Bitmap CreateBitmapFromByteArray(byte[] imgData)
+        {
+            using (var ms = new MemoryStream(imgData))
+            {
+                return (Bitmap)Image.FromStream(ms);
+            }
         }
     }
 }
