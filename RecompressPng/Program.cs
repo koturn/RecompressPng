@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using LibZopfliSharp;
 
 
@@ -195,7 +196,7 @@ namespace RecompressPng
                     var sw = Stopwatch.StartNew();
 
                     var threadId = Thread.CurrentThread.ManagedThreadId;
-                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} ...");
+                    Console.WriteLine($"[{threadId}] Compress {ToRelativePath(srcFilePath, srcBaseDirFullPath)} ...");
 
                     var dstFilePath = Path.Combine(
                         dstBaseDirFullPath,
@@ -262,6 +263,19 @@ namespace RecompressPng
                 fs.Read(buffer, 0, buffer.Length);
             }
             return buffer[0] == 'P' && buffer[1] == 'K';
+        }
+
+        /// <summary>
+        /// Convert path to relative path.
+        /// </summary>
+        /// <param name="targetPath">Target path.</param>
+        /// <param name="basePath">Base path.</param>
+        /// <returns>Relative path of <see cref="targetPath"/>.</returns>
+        private static string ToRelativePath(string targetPath, string basePath)
+        {
+            return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
+                .MakeRelativeUri(new Uri(Path.GetFullPath(targetPath))).ToString())
+                .Replace('/', '\\');
         }
 
         /// <summary>
