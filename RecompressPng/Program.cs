@@ -45,24 +45,24 @@ namespace RecompressPng
         /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
-            var (target, pngOptions, nThreads) = ParseCommadLineArguments(args);
+            var (target, pngOptions, nThreads, isOverwrite) = ParseCommadLineArguments(args);
             ShowCompressOptions(pngOptions);
 
             if (File.Exists(target))
             {
-                if (!IsZipFile(target))
+                if (IsZipFile(target))
+                {
+                    RecompressPngInZipArchive(target, null, pngOptions, nThreads);
+                }
+                else
                 {
                     Console.Error.WriteLine("Specified file is not zip archive");
                     return 1;
                 }
-                else
-                {
-                    RecompressPngInZipArchive(target, null, pngOptions, nThreads);
-                }
             }
             else if (Directory.Exists(target))
             {
-                RecompressPngInDirectory(target, null, pngOptions, nThreads);
+                RecompressPngInDirectory(target, null, pngOptions, nThreads, isOverwrite);
             }
             else
             {
@@ -78,7 +78,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="args">Command-line arguments</param>
         /// <returns>Parse result tuple.</returns>
-        private static (string Target, ZopfliPNGOptions PngOptions, int NumberOfThreads) ParseCommadLineArguments(string[] args)
+        private static (string Target, ZopfliPNGOptions PngOptions, int NumberOfThreads, bool IsOverwrite) ParseCommadLineArguments(string[] args)
         {
             var ap = new ArgumentParser()
             {
@@ -101,6 +101,7 @@ namespace RecompressPng
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
             ap.Add("lossy-transparent", "Allow altering hidden colors of fully transparent pixels.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
+            ap.Add("overwrite", "Overwrite original files.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.AddHelp();
@@ -142,7 +143,7 @@ namespace RecompressPng
                 zo.NumFilterStrategies = zo.FilterStrategies.Length;
             }
 
-            return (targets[0], zo, ap.Get<int>('n'));
+            return (targets[0], zo, ap.Get<int>('n'), ap.Get<bool>("overwrite"));
         }
 
         /// <summary>
@@ -262,7 +263,7 @@ namespace RecompressPng
             }
             else
             {
-                Console.WriteLine($"{nSameImages} / {nProcPngFiles} PNG files are different image.");
+                Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
             }
 
             File.Replace(
@@ -280,16 +281,12 @@ namespace RecompressPng
         /// <param name="dstDirPath">Destination directory.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads)
+        /// <param name="isOverwrite">Overwrite original file or not.</param>
+        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false)
         {
             if (dstDirPath == null)
             {
                 dstDirPath = srcDirPath + ".zopfli";
-            }
-
-            if (File.Exists(dstDirPath))
-            {
-                File.Delete(dstDirPath);
             }
 
             var srcBaseDirFullPath = Path.GetFullPath(srcDirPath);
@@ -312,7 +309,7 @@ namespace RecompressPng
                     var threadId = Thread.CurrentThread.ManagedThreadId;
                     Console.WriteLine($"[{threadId}] Compress {ToRelativePath(srcFilePath, srcBaseDirFullPath)} ...");
 
-                    var dstFilePath = Path.Combine(
+                    var dstFilePath = isOverwrite ? srcFilePath : Path.Combine(
                         dstBaseDirFullPath,
                         new StringBuilder(Path.GetFullPath(srcFilePath))
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
@@ -321,6 +318,7 @@ namespace RecompressPng
                     Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
 
                     var data = File.ReadAllBytes(srcFilePath);
+                    var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                     // Take a long time
                     var compressedData = ZopfliPng.OptimizePng(data, pngOptions);
@@ -328,7 +326,7 @@ namespace RecompressPng
                     File.WriteAllBytes(dstFilePath, compressedData);
 
                     // Keep original timestamp
-                    new FileInfo(dstFilePath).LastWriteTime = new FileInfo(srcFilePath).LastWriteTime;
+                    new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
 
                     Interlocked.Add(ref srcTotalFileSize, data.Length);
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
@@ -353,15 +351,16 @@ namespace RecompressPng
             }
             else
             {
-                Console.WriteLine($"{nSameImages} / {nProcPngFiles} PNG files are different image.");
+                Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
             }
 
-            MoveDirectoryForce(
-                srcDirPath,
-                Path.Combine(Path.GetDirectoryName(srcDirPath), Path.GetFileNameWithoutExtension(srcDirPath) + ".old"));
-            MoveDirectoryForce(
-                dstDirPath,
-                srcDirPath);
+            if (!isOverwrite)
+            {
+                ReplaceDirectory(
+                    dstDirPath,
+                    srcDirPath,
+                    Path.Combine(Path.GetDirectoryName(srcDirPath), Path.GetFileNameWithoutExtension(srcDirPath) + ".old"));
+            }
         }
 
         /// <summary>
@@ -394,16 +393,18 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Move the directory, but do delete if the destination directory exists.
+        /// Replace the directory and create backup directory.
         /// </summary>
         /// <param name="srcDirPath">Source directory path.</param>
-        /// <param name="dstDirPath">Destination directory path,</param>
-        private static void MoveDirectoryForce(string srcDirPath, string dstDirPath)
+        /// <param name="dstDirPath">Destination directory path.</param>
+        /// <param name="backupDirPath">Backup directory path.</param>
+        private static void ReplaceDirectory(string srcDirPath, string dstDirPath, string backupDirPath)
         {
-            if (Directory.Exists(dstDirPath))
+            if (Directory.Exists(backupDirPath))
             {
-                Directory.Delete(dstDirPath);
+                Directory.Delete(backupDirPath, true);
             }
+            Directory.Move(dstDirPath, backupDirPath);
             Directory.Move(srcDirPath, dstDirPath);
         }
 
