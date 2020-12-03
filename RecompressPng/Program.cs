@@ -296,7 +296,7 @@ namespace RecompressPng
                         }
 
                         var verifyResultMsg = isSameImage ? "same image" : "different image";
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -304,7 +304,7 @@ namespace RecompressPng
 
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
             if (nProcPngFiles == nSameImages)
             {
                 Console.WriteLine("All the image data before and after re-compressing are the same.");
@@ -358,7 +358,8 @@ namespace RecompressPng
                     var sw = Stopwatch.StartNew();
 
                     var threadId = Thread.CurrentThread.ManagedThreadId;
-                    Console.WriteLine($"[{threadId}] Compress {ToRelativePath(srcFilePath, srcBaseDirFullPath)} ...");
+                    var srcRelPath = ToRelativePath(srcFilePath, srcBaseDirFullPath);
+                    Console.WriteLine($"[{threadId}] Compress {srcRelPath} ...");
 
                     var dstFilePath = isOverwrite ? srcFilePath : Path.Combine(
                         dstBaseDirFullPath,
@@ -390,12 +391,12 @@ namespace RecompressPng
                     }
 
                     var verifyResultMsg = isSameImage ? "same image" : "different image";
-                    Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    Console.WriteLine($"[{threadId}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
             if (nProcPngFiles == nSameImages)
             {
                 Console.WriteLine("All the image data before and after re-compressing are the same.");
