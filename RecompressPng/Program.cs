@@ -198,10 +198,37 @@ namespace RecompressPng
                 var srcLock = new object();
                 var dstLock = isOverwrite ? null : new object();
                 Parallel.ForEach(
-                    srcArchive.Entries.Where(entry => entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)),
+                    srcArchive.Entries,
                     new ParallelOptions() { MaxDegreeOfParallelism = nThreads },
                     srcEntry =>
                     {
+                        if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!isOverwrite)
+                            {
+                                return;
+                            }
+                            using (var ms = new MemoryStream((int)srcEntry.Length))
+                            {
+                                lock (srcLock)
+                                {
+                                    using (var srcZs = srcEntry.Open())
+                                    {
+                                        srcZs.CopyTo(ms);
+                                    }
+                                }
+                                lock (dstLock)
+                                {
+                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                    using (var dstZs = dstEntry.Open())
+                                    {
+                                        ms.CopyTo(dstZs);
+                                    }
+                                }
+                            }
+                            return;
+                        }
+
                         var sw = Stopwatch.StartNew();
 
                         var threadId = Thread.CurrentThread.ManagedThreadId;
