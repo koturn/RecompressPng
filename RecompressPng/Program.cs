@@ -10,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using ArgumentParserNetStd;
-using LibZopfliSharp;
 
 
 namespace RecompressPng
@@ -32,7 +31,8 @@ namespace RecompressPng
         /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
-            var (target, zo, nThreads) = ParseCommadLineArguments(args);
+            var (target, pngOptions, nThreads) = ParseCommadLineArguments(args);
+            ShowCompressOptions(pngOptions);
 
             if (File.Exists(target))
             {
@@ -43,12 +43,12 @@ namespace RecompressPng
                 }
                 else
                 {
-                    RecompressPngInZipArchive(target, null, zo, nThreads);
+                    RecompressPngInZipArchive(target, null, pngOptions, nThreads);
                 }
             }
             else if (Directory.Exists(target))
             {
-                RecompressPngInDirectory(target, null, zo, nThreads);
+                RecompressPngInDirectory(target, null, pngOptions, nThreads);
             }
             else
             {
@@ -64,7 +64,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="args">Command-line arguments</param>
         /// <returns>Parse result tuple.</returns>
-        private static (string Target, ZopfliPNGOptions CompressOption, int NumberOfThreads) ParseCommadLineArguments(string[] args)
+        private static (string Target, ZopfliPNGOptions PngOptions, int NumberOfThreads) ParseCommadLineArguments(string[] args)
         {
             var ap = new ArgumentParser()
             {
@@ -87,7 +87,7 @@ namespace RecompressPng
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
             ap.Add("lossy-transparent", "Allow altering hidden colors of fully transparent pixels.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
-            ap.Add("no-auto-filter-strategy", OptionType.RequiredArgument, "Automatically choose filter strategy using less good compression.", "NUM", true);
+            ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.AddHelp();
 
@@ -111,36 +111,42 @@ namespace RecompressPng
                 Console.Error.WriteLine("Proccess first argument: " + targets[0]);
             }
 
-            var zo = new ZopfliPNGOptions()
-            {
-                num_iterations = ap.Get<int>('i'),
-                num_iterations_large = ap.Get<int>('I')
-            };
+            var zo = ZopfliPNGOptions.GetDefault();
+            zo.NumIterations = ap.Get<int>('i');
+            zo.NumIterationsLarge = ap.Get<int>('I');
+            zo.LossyTransparent = ap.Get<bool>("lossy-transparent");
+            zo.Lossy8bit = ap.Get<bool>("lossy-8bit");
+            zo.AutoFilterStrategy = !ap.Get<bool>("no-auto-filter-strategy");
+            zo.UseZopfli = !ap.Get<bool>("no-use-zopfli");
+
             if (ap.Exists('s'))
             {
-                zo.filter_strategies = ap.Get('s')
+                zo.FilterStrategies = ap.Get('s')
                     .Split(',')
                     .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token))
                     .ToArray();
-            }
-            if (ap.Exists("lossy-transparent"))
-            {
-                zo.lossy_transparent = true;
-            }
-            if (ap.Exists("lossy-8bit"))
-            {
-                zo.lossy_8bit = true;
-            }
-            if (ap.Exists("no-auto-filter-strategy"))
-            {
-                zo.use_zopfli = false;
-            }
-            if (ap.Exists("no-use-zopfli"))
-            {
-                zo.use_zopfli = false;
+                zo.NumFilterStrategies = zo.FilterStrategies.Length;
             }
 
             return (targets[0], zo, ap.Get<int>('n'));
+        }
+
+        /// <summary>
+        /// Output options for zopflipng to stdout.
+        /// </summary>
+        /// <param name="pngOptions">Options for zopflipng</param>
+        private static void ShowCompressOptions(ZopfliPNGOptions pngOptions)
+        {
+            var strategies = pngOptions.FilterStrategies == null ? "" : string.Join(", ", pngOptions.FilterStrategies);
+            var keepChunks = pngOptions.KeepChunks == null ? "" : string.Join(", ", pngOptions.KeepChunks);
+            Console.WriteLine($"Lossy Transparent: {pngOptions.LossyTransparent}");
+            Console.WriteLine($"Lossy 8bit: {pngOptions.Lossy8bit}");
+            Console.WriteLine($"ZopfliPNG Filter Strategies: {strategies}");
+            Console.WriteLine($"Auto Filter Strategy: {pngOptions.AutoFilterStrategy}");
+            Console.WriteLine($"Keep Chunks: {keepChunks}");
+            Console.WriteLine($"Use Zopfli: {pngOptions.UseZopfli}");
+            Console.WriteLine($"Number of Iterations: {pngOptions.NumIterations}");
+            Console.WriteLine($"Number of Iterations on Large Images: {pngOptions.NumIterationsLarge}");
         }
 
         /// <summary>
@@ -148,9 +154,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="srcZipFilePath">Source zip archive file.</param>
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
-        /// <param name="zo">Options for zopflipng.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions zo, int nThreads)
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, int nThreads)
         {
             if (dstZipFilePath == null)
             {
@@ -195,7 +201,10 @@ namespace RecompressPng
                         }
 
                         // Take a long time
-                        var compressedData = ZopfliPNG.compress(data, zo);
+                        // var compressedData = ZopfliPNG.compress(data, zo);
+                        var compressedData = ZopfliPng.OptimizePng(
+                            data,
+                            pngOptions);
 
                         lock (dstLock)
                         {
@@ -249,9 +258,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="srcDirPath">Source directory.</param>
         /// <param name="dstDirPath">Destination directory.</param>
-        /// <param name="zo">Options for zopflipng.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions zo, int nThreads)
+        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads)
         {
             if (dstDirPath == null)
             {
@@ -294,7 +303,7 @@ namespace RecompressPng
                     var data = File.ReadAllBytes(srcFilePath);
 
                     // Take a long time
-                    var compressedData = ZopfliPNG.compress(data, zo);
+                    var compressedData = ZopfliPng.OptimizePng(data, pngOptions);
 
                     File.WriteAllBytes(dstFilePath, compressedData);
 
