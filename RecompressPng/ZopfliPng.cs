@@ -48,39 +48,39 @@ namespace RecompressPng
         /// <summary>
         /// Re-compress deflated data in PNG with zopfli algorithm.
         /// </summary>
-        /// <param name="pngData">Source PNG binary</param>
+        /// <param name="pngData">Source PNG binary.</param>
         /// <param name="verbose">Output verbose message to stdout using printf() or not from zopflipng.dll.</param>
         /// <returns>Result PNG binary.</returns>
-        public static byte[] OptimizePng(byte[] pngData,  bool verbose = false)
+        public static byte[] OptimizePng(byte[] pngData, bool verbose = false)
         {
-            return OptimizePng(pngData, pngData.Length, ZopfliPNGOptions.GetDefault(), verbose);
+            return OptimizePng(pngData, pngData.LongLength, ZopfliPNGOptions.GetDefault(), verbose);
         }
 
         /// <summary>
         /// Re-compress deflated data in PNG with zopfli algorithm.
         /// </summary>
-        /// <param name="pngData">Source PNG binary</param>
+        /// <param name="pngData">Source PNG binary.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="verbose">Output verbose message to stdout using printf() or not from zopflipng.dll.</param>
         /// <returns>Result PNG binary.</returns>
         public static byte[] OptimizePng(byte[] pngData, ZopfliPNGOptions pngOptions, bool verbose = false)
         {
-            return OptimizePng(pngData, pngData.Length, pngOptions, verbose);
+            return OptimizePng(pngData, pngData.LongLength, pngOptions, verbose);
         }
 
         /// <summary>
         /// Re-compress deflated data in PNG with zopfli algorithm.
         /// </summary>
-        /// <param name="pngData">Source PNG binary</param>
-        /// <param name="pngDataCount"></param>
+        /// <param name="pngData">Source PNG binary.</param>
+        /// <param name="pngDataLength">Byte length of <paramref name="pngData"/>.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="verbose">Output verbose message to stdout using printf() or not from zopflipng.dll.</param>
         /// <returns>Result PNG binary.</returns>
-        public static byte[] OptimizePng(byte[] pngData, int pngDataCount, ZopfliPNGOptions pngOptions, bool verbose = false)
+        public static byte[] OptimizePng(byte[] pngData, long pngDataLength, ZopfliPNGOptions pngOptions, bool verbose = false)
         {
             var error = UnsafeNativeMethods.CZopfliPNGOptimize(
                 pngData,
-                (UIntPtr)pngDataCount,
+                (UIntPtr)pngDataLength,
                 ref pngOptions,
                 verbose,
                 out var pResultPng,

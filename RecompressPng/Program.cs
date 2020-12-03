@@ -205,6 +205,7 @@ namespace RecompressPng
                         Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} ...");
 
                         byte[] data;
+                        long dataLength;
                         using (var ms = new MemoryStream(DefaultReadCapacitySize))
                         {
                             lock (srcLock)
@@ -214,13 +215,14 @@ namespace RecompressPng
                                     srcZs.CopyTo(ms);
                                 }
                             }
-                            data = ms.ToArray();
+                            data = ms.GetBuffer();
+                            dataLength = ms.Length;
                         }
 
                         // Take a long time
-                        // var compressedData = ZopfliPNG.compress(data, zo);
                         var compressedData = ZopfliPng.OptimizePng(
                             data,
+                            dataLength,
                             pngOptions);
 
                         lock (dstLock)
@@ -237,14 +239,14 @@ namespace RecompressPng
 
                         // The comparison of image data is considered to take a little longer.
                         // Therefore, atomically incremented nSameImages outside of the lock statement.
-                        var isSameImage = CompareImage(data, compressedData);
+                        var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
                         if (isSameImage)
                         {
                             Interlocked.Increment(ref nSameImages);
                         }
 
                         var verifyResultMsg = isSameImage ? "same image" : "different image";
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -442,6 +444,21 @@ namespace RecompressPng
         /// <summary>
         /// Compare and determine two image data is same or not.
         /// </summary>
+        /// <param name="imgData1">First image data.</param>
+        /// <param name="imgDataLength1">Byte length of <paramref name="imgData1"/>.</param>
+        /// <param name="imgData2">Second image data.</param>
+        /// <param name="imgDataLength2">Byte length of <paramref name="imgData2"/>.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static bool CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
+        {
+            return CompareImage(
+                CreateBitmapFromByteArray(imgData1, imgDataLength1),
+                CreateBitmapFromByteArray(imgData2, imgDataLength2));
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
         /// <param name="img1">First image data.</param>
         /// <param name="img2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
@@ -499,11 +516,28 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromByteArray(byte[] imgData)
+        private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData)
         {
             using (var ms = new MemoryStream(imgData))
             {
                 return (Bitmap)Image.FromStream(ms);
+            }
+        }
+
+        /// <summary>
+        /// Convert <see cref="Bitmap"/> instance from image data.
+        /// </summary>
+        /// <param name="imgData">Image data.</param>
+        /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
+        /// <returns><see cref="Bitmap"/> instance.</returns>
+        private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
+        {
+            fixed (byte* pImgData = imgData)
+            {
+                using (var ums = new UnmanagedMemoryStream(pImgData, imgDataLength))
+                {
+                    return (Bitmap)Image.FromStream(ums);
+                }
             }
         }
 
