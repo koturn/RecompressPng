@@ -263,12 +263,12 @@ namespace RecompressPng
                 Console.WriteLine($"{nSameImages} / {nProcPngFiles} PNG files are different image.");
             }
 
-            MoveFileForce(
-                srcZipFilePath,
-                Path.Combine(Path.GetDirectoryName(srcZipFilePath), Path.GetFileNameWithoutExtension(srcZipFilePath) + ".old.zip"));
-            MoveFileForce(
+            File.Replace(
                 dstZipFilePath,
-                Path.Combine(Path.GetDirectoryName(dstZipFilePath), Path.GetFileNameWithoutExtension(dstZipFilePath)));
+                srcZipFilePath,
+                Path.Combine(
+                    Path.GetDirectoryName(srcZipFilePath),
+                    Path.GetFileNameWithoutExtension(srcZipFilePath) + ".old.zip"));
         }
 
         /// <summary>
@@ -359,7 +359,7 @@ namespace RecompressPng
                 Path.Combine(Path.GetDirectoryName(srcDirPath), Path.GetFileNameWithoutExtension(srcDirPath) + ".old"));
             MoveDirectoryForce(
                 dstDirPath,
-                Path.Combine(Path.GetDirectoryName(dstDirPath), Path.GetFileNameWithoutExtension(dstDirPath)));
+                srcDirPath);
         }
 
         /// <summary>
@@ -389,20 +389,6 @@ namespace RecompressPng
             return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
                 .MakeRelativeUri(new Uri(Path.GetFullPath(targetPath))).ToString())
                 .Replace('/', '\\');
-        }
-
-        /// <summary>
-        /// Move the file, but do delete if the destination file exists.
-        /// </summary>
-        /// <param name="srcFilePath">Source file path.</param>
-        /// <param name="dstFilePath">Destination file path,</param>
-        private static void MoveFileForce(string srcFilePath, string dstFilePath)
-        {
-            if (File.Exists(dstFilePath))
-            {
-                File.Delete(dstFilePath);
-            }
-            File.Move(srcFilePath, dstFilePath);
         }
 
         /// <summary>
