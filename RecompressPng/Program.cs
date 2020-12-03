@@ -5,6 +5,9 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +26,17 @@ namespace RecompressPng
         /// Default capacity for <see cref="MemoryStream"/> to read zip archive entries.
         /// </summary>
         const int DefaultReadCapacitySize = 4 * 1024 * 1024;
+
+        /// <summary>
+        /// Setup DLL search path.
+        /// </summary>
+        static Program()
+        {
+            UnsafeNativeMethods.SetDllDirectory(
+                Path.Combine(
+                    Path.GetDirectoryName(Assembly.GetEntryAssembly().Location),
+                    Environment.Is64BitProcess ? "x64" : "x86"));
+        }
 
         /// <summary>
         /// An entry point of this program.
@@ -139,6 +153,8 @@ namespace RecompressPng
         {
             var strategies = pngOptions.FilterStrategies == null ? "" : string.Join(", ", pngOptions.FilterStrategies);
             var keepChunks = pngOptions.KeepChunks == null ? "" : string.Join(", ", pngOptions.KeepChunks);
+
+            Console.WriteLine("- - - ZopfliPNG Parameters - - -");
             Console.WriteLine($"Lossy Transparent: {pngOptions.LossyTransparent}");
             Console.WriteLine($"Lossy 8bit: {pngOptions.Lossy8bit}");
             Console.WriteLine($"ZopfliPNG Filter Strategies: {strategies}");
@@ -147,6 +163,7 @@ namespace RecompressPng
             Console.WriteLine($"Use Zopfli: {pngOptions.UseZopfli}");
             Console.WriteLine($"Number of Iterations: {pngOptions.NumIterations}");
             Console.WriteLine($"Number of Iterations on Large Images: {pngOptions.NumIterationsLarge}");
+            Console.WriteLine("- - -");
         }
 
         /// <summary>
@@ -234,6 +251,7 @@ namespace RecompressPng
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
             var dstFileSize = new FileInfo(dstZipFilePath).Length;
 
+            Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
             if (nProcPngFiles == nSameImages)
@@ -324,6 +342,7 @@ namespace RecompressPng
                     Console.WriteLine($"[{threadId}] Compress {srcFilePath} done: {sw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
+            Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} ms, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
             if (nProcPngFiles == nSameImages)
@@ -500,6 +519,22 @@ namespace RecompressPng
             {
                 return (Bitmap)Image.FromStream(ms);
             }
+        }
+
+        /// <summary>
+        /// Native methods.
+        /// </summary>
+        [SuppressUnmanagedCodeSecurity]
+        internal class UnsafeNativeMethods
+        {
+            /// <summary>
+            /// Adds a directory to the search path used to locate DLLs for the application.
+            /// </summary>
+            /// <param name="path">Path to DLL directory.</param>
+            /// <returns>True if success to set directory, otherwise false.</returns>
+            [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            [SuppressUnmanagedCodeSecurity]
+            public static extern bool SetDllDirectory(string path);
         }
     }
 }
