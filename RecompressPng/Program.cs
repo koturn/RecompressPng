@@ -383,7 +383,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="targetPath">Target path.</param>
         /// <param name="basePath">Base path.</param>
-        /// <returns>Relative path of <see cref="targetPath"/>.</returns>
+        /// <returns>Relative path of <paramref name="targetPath"/>.</returns>
         private static string ToRelativePath(string targetPath, string basePath)
         {
             return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
@@ -394,8 +394,8 @@ namespace RecompressPng
         /// <summary>
         /// Move the directory, but do delete if the destination directory exists.
         /// </summary>
-        /// <param name="srcFilePath">Source directory path.</param>
-        /// <param name="dstFilePath">Destination directory path,</param>
+        /// <param name="srcDirPath">Source directory path.</param>
+        /// <param name="dstDirPath">Destination directory path,</param>
         private static void MoveDirectoryForce(string srcDirPath, string dstDirPath)
         {
             if (Directory.Exists(dstDirPath))
