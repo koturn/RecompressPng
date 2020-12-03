@@ -52,7 +52,7 @@ namespace RecompressPng
             {
                 if (IsZipFile(target))
                 {
-                    RecompressPngInZipArchive(target, null, pngOptions, nThreads);
+                    RecompressPngInZipArchive(target, null, pngOptions, nThreads, isOverwrite);
                 }
                 else
                 {
@@ -174,27 +174,29 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, int nThreads)
+        /// <param name="isOverwrite">Overwrite PNG files in the zip archive file.</param>
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false)
         {
             if (dstZipFilePath == null)
             {
                 dstZipFilePath = srcZipFilePath + ".zopfli";
             }
 
-            if (File.Exists(dstZipFilePath))
+            if (!isOverwrite && File.Exists(dstZipFilePath))
             {
                 File.Delete(dstZipFilePath);
             }
 
-
             int nProcPngFiles = 0;
             int nSameImages = 0;
             var totalSw = Stopwatch.StartNew();
-            using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
-            using (var dstArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
+            var srcFileSize = new FileInfo(srcZipFilePath).Length;
+
+            using (var srcArchive = ZipFile.Open(srcZipFilePath, ZipArchiveMode.Update))
+            using (var dstArchive = isOverwrite ? null : ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
             {
                 var srcLock = new object();
-                var dstLock = new object();
+                var dstLock = isOverwrite ? null : new object();
                 Parallel.ForEach(
                     srcArchive.Entries.Where(entry => entry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)),
                     new ParallelOptions() { MaxDegreeOfParallelism = nThreads },
@@ -207,7 +209,7 @@ namespace RecompressPng
 
                         byte[] data;
                         long dataLength;
-                        using (var ms = new MemoryStream(DefaultReadCapacitySize))
+                        using (var ms = new MemoryStream((int)srcEntry.Length))
                         {
                             lock (srcLock)
                             {
@@ -226,16 +228,36 @@ namespace RecompressPng
                             dataLength,
                             pngOptions);
 
-                        lock (dstLock)
+                        if (isOverwrite)
                         {
-                            var dstEntry = dstArchive.CreateEntry(srcEntry.FullName);
-                            using (var dstZs = dstEntry.Open())
+                            var lastWriteTime = srcEntry.LastWriteTime;
+                            lock (srcLock)
                             {
-                                dstZs.Write(compressedData, 0, compressedData.Length);
+                                var newSrcEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                srcEntry.Delete();
+                                srcEntry = newSrcEntry;
+                                using (var srcZs = srcEntry.Open())
+                                {
+                                    srcZs.Write(compressedData, 0, compressedData.Length);
+                                }
+                                // Keep original timestamp
+                                srcEntry.LastWriteTime = lastWriteTime;
+                                nProcPngFiles++;
                             }
-                            // Keep original timestamp
-                            dstEntry.LastWriteTime = srcEntry.LastWriteTime;
-                            nProcPngFiles++;
+                        }
+                        else
+                        {
+                            lock (dstLock)
+                            {
+                                var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                using (var dstZs = dstEntry.Open())
+                                {
+                                    dstZs.Write(compressedData, 0, compressedData.Length);
+                                }
+                                // Keep original timestamp
+                                dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                                nProcPngFiles++;
+                            }
                         }
 
                         // The comparison of image data is considered to take a little longer.
@@ -251,8 +273,7 @@ namespace RecompressPng
                     });
             }
 
-            var srcFileSize = new FileInfo(srcZipFilePath).Length;
-            var dstFileSize = new FileInfo(dstZipFilePath).Length;
+            var dstFileSize = new FileInfo(isOverwrite ? srcZipFilePath : dstZipFilePath).Length;
 
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
@@ -266,12 +287,15 @@ namespace RecompressPng
                 Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
             }
 
-            File.Replace(
-                dstZipFilePath,
-                srcZipFilePath,
-                Path.Combine(
-                    Path.GetDirectoryName(srcZipFilePath),
-                    Path.GetFileNameWithoutExtension(srcZipFilePath) + ".old.zip"));
+            if (!isOverwrite)
+            {
+                File.Replace(
+                    dstZipFilePath,
+                    srcZipFilePath,
+                    Path.Combine(
+                        Path.GetDirectoryName(srcZipFilePath),
+                        Path.GetFileNameWithoutExtension(srcZipFilePath) + ".old.zip"));
+            }
         }
 
         /// <summary>
@@ -281,7 +305,7 @@ namespace RecompressPng
         /// <param name="dstDirPath">Destination directory.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
-        /// <param name="isOverwrite">Overwrite original file or not.</param>
+        /// <param name="isOverwrite">Overwrite PNG files in the directory.</param>
         private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false)
         {
             if (dstDirPath == null)
