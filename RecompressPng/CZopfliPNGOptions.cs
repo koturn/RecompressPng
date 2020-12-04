@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -25,11 +26,11 @@ namespace RecompressPng
         /// <summary>
         /// Filter strategies to try.
         /// </summary>
-        public IntPtr FilterStrategiesPointer { get; set; }
+        public IntPtr FilterStrategiesPointer { get; private set; }
         /// <summary>
         /// How many strategies to try.
         /// </summary>
-        public int NumFilterStrategies { get; set; }
+        public int NumFilterStrategies { get; private set; }
         /// <summary>
         /// Automatically choose filter strategy using less good compression.
         /// </summary>
@@ -38,11 +39,11 @@ namespace RecompressPng
         /// <para>PNG chunks to keep</para>
         /// <para>chunks to literally copy over from the original PNG to the resulting one.</para>
         /// </summary>
-        public IntPtr KeepChunksPointer { get; set; }
+        public IntPtr KeepChunksPointer { get; private set; }
         /// <summary>
         /// How many entries in keepchunks.
         /// </summary>
-        public int NumKeepChunks { get; set; }
+        public int NumKeepChunks { get; private set; }
         /// <summary>
         /// Use Zopfli deflate compression.
         /// </summary>
@@ -106,44 +107,42 @@ namespace RecompressPng
                   pngOptions.NumIterations,
                   pngOptions.NumIterationsLarge)
         {
-            var filterStrategies = pngOptions.FilterStrategies;
-            var filterStrategiesCount = filterStrategies.Count;
-            FilterStrategiesPointer = Marshal.AllocCoTaskMem(sizeof(ZopfliPNGFilterStrategy) * filterStrategiesCount);
-            NumFilterStrategies = filterStrategies.Count;
+            SetFilterStrategies(pngOptions.FilterStrategies);
+            SetKeepChunks(pngOptions.KeepChunks);
+        }
 
-            unsafe
+        /// <summary>
+        /// Set <see cref="FilterStrategiesPointer"/> and <see cref="NumFilterStrategies"/> from a list.
+        /// </summary>
+        /// <param name="filterStrategies">List of filter strategies.</param>
+        public void SetFilterStrategies(List<ZopfliPNGFilterStrategy> filterStrategies)
+        {
+            (FilterStrategiesPointer, NumFilterStrategies) = CreateFilterStrategies(filterStrategies);
+        }
+
+        /// <summary>
+        /// Set <see cref="KeepChunksPointer"/> and <see cref="NumKeepChunks"/> from a list.
+        /// </summary>
+        /// <param name="keepChunks">List of chunk names.</param>
+        public void SetKeepChunks(List<string> keepChunks)
+        {
+            (KeepChunksPointer, NumKeepChunks) = CreateKeepChunks(keepChunks);
+        }
+
+
+        /// <summary>
+        /// Dispose resource of <see cref="FilterStrategiesPointer"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            if (FilterStrategiesPointer != null)
             {
-                var p = (ZopfliPNGFilterStrategy*)FilterStrategiesPointer;
-                for (int i = 0; i < filterStrategiesCount; i++)
-                {
-                    p[i] = filterStrategies[i];
-                }
+                Marshal.FreeCoTaskMem(FilterStrategiesPointer);
             }
-
-            var keepChunks = pngOptions.KeepChunks;
-            var totalKeepChunkMemorySize = keepChunks.Aggregate(0, (acc, keepChunk) => acc + (keepChunk.Length + 1) * sizeof(char));
-            unsafe
+            if (KeepChunksPointer != null)
             {
-                // Memory:
-                //   p_i: Pointer to c_i.
-                //   c_i: Null-terminate string.
-                //   [p_0][p_1][p_2]...[p_n][c_1][c_2][c_3]...[c_n]
-                KeepChunksPointer = Marshal.AllocCoTaskMem(keepChunks.Count * sizeof(IntPtr) + totalKeepChunkMemorySize);
-                var keepChunksCount = keepChunks.Count;
-                var p = (byte**)KeepChunksPointer;
-                var q = (byte*)(p + keepChunksCount);
-
-                for (int i = 0; i < keepChunksCount; i++)
-                {
-                    p[i] = q;
-                    foreach (var c in Encoding.ASCII.GetBytes(keepChunks[i]))
-                    {
-                        *q++ = c;
-                    }
-                    *q++ = 0;  // Null-terminate
-                }
+                Marshal.FreeCoTaskMem(KeepChunksPointer);
             }
-            NumKeepChunks = keepChunks.Count;
         }
 
         /// <summary>
@@ -158,17 +157,69 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Dispose resource of <see cref="FilterStrategiesPointer"/>.
+        /// Allocate and write filter strategies data.
         /// </summary>
-        public void Dispose()
+        /// <param name="filterStrategies">List of filter strategies.</param>
+        /// <returns>Tuple of pointer to the filter strategies and the number of them.</returns>
+        private static (IntPtr FilterStrategiesPointer, int NumFilterStrategies) CreateFilterStrategies(List<ZopfliPNGFilterStrategy> filterStrategies)
         {
-            if (FilterStrategiesPointer != null)
+            if (filterStrategies.Count == 0)
             {
-                Marshal.FreeCoTaskMem(FilterStrategiesPointer);
+                return (IntPtr.Zero, 0);
             }
-            if (KeepChunksPointer != null)
+
+            var filterStrategiesCount = filterStrategies.Count;
+            var filterStrategiesPointer = Marshal.AllocCoTaskMem(sizeof(ZopfliPNGFilterStrategy) * filterStrategiesCount);
+            var numFilterStrategies = filterStrategies.Count;
+
+            unsafe
             {
-                Marshal.FreeCoTaskMem(KeepChunksPointer);
+                var p = (ZopfliPNGFilterStrategy*)filterStrategiesPointer;
+                for (int i = 0; i < filterStrategiesCount; i++)
+                {
+                    p[i] = filterStrategies[i];
+                }
+            }
+
+            return (filterStrategiesPointer, numFilterStrategies);
+        }
+
+        /// <summary>
+        /// Allocate and write chunk names to keep.
+        /// </summary>
+        /// <param name="keepChunks">List of chunk names.</param>
+        /// <returns>Tuple of pointer to the chunk names and the number of them.</returns>
+        private static (IntPtr KeepChunksPointer, int NumKeepChunks) CreateKeepChunks(List<string> keepChunks)
+        {
+            if (keepChunks.Count == 0)
+            {
+                return (IntPtr.Zero, 0);
+            }
+
+            unsafe
+            {
+                var memorySize = keepChunks.Aggregate(0, (acc, keepChunk) => acc + (keepChunk.Length + 1) * sizeof(char));
+
+                // Memory:
+                //   p_i: Pointer to c_i.
+                //   c_i: Null-terminate string.
+                //   [p_0][p_1][p_2]...[p_n][c_1][c_2][c_3]...[c_n]
+                var keepChunksCount = keepChunks.Count;
+                var keepChunksPointer = Marshal.AllocCoTaskMem(keepChunksCount * sizeof(byte*) + memorySize);
+
+                var p = (byte**)keepChunksPointer;
+                var q = (byte*)(p + keepChunksCount);
+                for (int i = 0; i < keepChunksCount; i++)
+                {
+                    p[i] = q;
+                    foreach (var c in Encoding.ASCII.GetBytes(keepChunks[i]))
+                    {
+                        *q++ = c;
+                    }
+                    *q++ = 0;  // Null-terminate
+                }
+
+                return (keepChunksPointer, keepChunksCount);
             }
         }
     }

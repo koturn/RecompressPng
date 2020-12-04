@@ -131,8 +131,6 @@ namespace RecompressPng
                 cPngOptions.NumIterations,
                 cPngOptions.NumIterationsLarge);
 
-
-
             unsafe
             {
                 if (cPngOptions.FilterStrategiesPointer != IntPtr.Zero)
