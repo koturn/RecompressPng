@@ -1,4 +1,6 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 
 namespace RecompressPng
@@ -50,7 +52,7 @@ namespace RecompressPng
     /// Structure of options for zopflipng.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct ZopfliPNGOptions
+    public class ZopfliPNGOptions
     {
         /// <summary>
         /// Allow altering hidden colors of fully transparent pixels.
@@ -63,11 +65,7 @@ namespace RecompressPng
         /// <summary>
         /// Filter strategies to try.
         /// </summary>
-        public ZopfliPNGFilterStrategy[] FilterStrategies { get; set; }
-        /// <summary>
-        /// How many strategies to try.
-        /// </summary>
-        public int NumFilterStrategies { get; set; }
+        public List<ZopfliPNGFilterStrategy> FilterStrategies { get; }
         /// <summary>
         /// Automatically choose filter strategy using less good compression.
         /// </summary>
@@ -76,11 +74,7 @@ namespace RecompressPng
         /// <para>PNG chunks to keep</para>
         /// <para>chunks to literally copy over from the original PNG to the resulting one.</para>
         /// </summary>
-        public string[] KeepChunks { get; set; }
-        /// <summary>
-        /// How many entries in keepchunks.
-        /// </summary>
-        int NumKeepChunks { get; set; }
+        public List<string> KeepChunks { get; }
         /// <summary>
         /// Use Zopfli deflate compression.
         /// </summary>
@@ -93,20 +87,68 @@ namespace RecompressPng
         /// Zopfli number of iterations on large images.
         /// </summary>
         public int NumIterationsLarge { get; set; }
-        /// <summary>
-        /// Unused, left for backwards compatiblity.
-        /// </summary>
-        private int _blockSplitStrategy;
+
 
         /// <summary>
-        /// Get default option value.
+        /// Create option instance for zopflipng with default parameters.
         /// </summary>
-        /// <returns>Default option value</returns>
+        /// <param name="lossyTransparent">Allow altering hidden colors of fully transparent pixels.</param>
+        /// <param name="lossy8bit">Convert 16-bit per channel images to 8-bit per channel.</param>
+        /// <param name="autoFilterStrategy">Automatically choose filter strategy using less good compression.</param>
+        /// <param name="useZopfli">Use Zopfli deflate compression.</param>
+        /// <param name="numIterations">Zopfli number of iterations.</param>
+        /// <param name="numIterationsLarge">Zopfli number of iterations on large images.</param>
+        public ZopfliPNGOptions(
+            bool lossyTransparent = false,
+            bool lossy8bit = false,
+            bool autoFilterStrategy = true,
+            bool useZopfli = true,
+            int numIterations = 15,
+            int numIterationsLarge = 5)
+        {
+            LossyTransparent = lossyTransparent;
+            Lossy8bit = lossy8bit;
+            FilterStrategies = new List<ZopfliPNGFilterStrategy>();
+            AutoFilterStrategy = autoFilterStrategy;
+            KeepChunks = new List<string>();
+            UseZopfli = useZopfli;
+            NumIterations = numIterations;
+            NumIterationsLarge = numIterationsLarge;
+        }
+
+        /// <summary>
+        /// Get default option value from zopflipng.dll.
+        /// </summary>
+        /// <returns>Default option value.</returns>
         public static ZopfliPNGOptions GetDefault()
         {
-            var pngOptions = new ZopfliPNGOptions();
-            ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(ref pngOptions);
-            return pngOptions;
+            var cPngOptions = CZopfliPNGOptions.GetDefault();
+            var obj = new ZopfliPNGOptions(
+                cPngOptions.LossyTransparent,
+                cPngOptions.Lossy8bit,
+                cPngOptions.AutoFilterStrategy,
+                cPngOptions.UseZopfli,
+                cPngOptions.NumIterations,
+                cPngOptions.NumIterationsLarge);
+
+
+            if (cPngOptions.FilterStrategiesPointer != IntPtr.Zero)
+            {
+                unsafe
+                {
+                    var pFilterStrategies = (int*)cPngOptions.FilterStrategiesPointer;
+                    for (int i = 0, im = cPngOptions.NumFilterStrategies; i < im; i++)
+                    {
+                        obj.FilterStrategies.Add((ZopfliPNGFilterStrategy)pFilterStrategies[i]);
+                    }
+                }
+            }
+            if (cPngOptions.KeepChunks != null)
+            {
+                obj.KeepChunks.AddRange(cPngOptions.KeepChunks);
+            }
+
+            return obj;
         }
     }
 }

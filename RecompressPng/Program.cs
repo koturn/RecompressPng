@@ -137,11 +137,9 @@ namespace RecompressPng
 
             if (ap.Exists('s'))
             {
-                zo.FilterStrategies = ap.Get('s')
+                zo.FilterStrategies.AddRange(ap.Get('s')
                     .Split(',')
-                    .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token))
-                    .ToArray();
-                zo.NumFilterStrategies = zo.FilterStrategies.Length;
+                    .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token)));
             }
 
             return (targets[0], zo, ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'));

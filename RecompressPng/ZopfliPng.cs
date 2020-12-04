@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 
@@ -6,7 +7,7 @@ using System.Security;
 namespace RecompressPng
 {
     /// <summary>
-    /// Utility class of zopflipng.dll
+    /// Option value for zopflipng.
     /// </summary>
     public static class ZopfliPng
     {
@@ -22,7 +23,7 @@ namespace RecompressPng
             /// <param name="pngOptions">Options struct for zopflipng.</param>
             [DllImport("zopflipng.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
             [SuppressUnmanagedCodeSecurity]
-            public static extern void CZopfliPNGSetDefaults(ref ZopfliPNGOptions pngOptions);
+            public static extern void CZopfliPNGSetDefaults(ref CZopfliPNGOptions pngOptions);
 
             /// <summary>
             /// Re-compress deflated data in PNG with zopfli algorithm.
@@ -39,7 +40,7 @@ namespace RecompressPng
             public static extern unsafe int CZopfliPNGOptimize(
                 byte[] origPng,
                 UIntPtr origpngSize,
-                ref ZopfliPNGOptions pngOptions,
+                CZopfliPNGOptions pngOptions,
                 bool verbose,
                 out IntPtr resultPng,
                 out UIntPtr resultpngSize);
@@ -78,26 +79,29 @@ namespace RecompressPng
         /// <returns>Result PNG binary.</returns>
         public static byte[] OptimizePng(byte[] pngData, long pngDataLength, ZopfliPNGOptions pngOptions, bool verbose = false)
         {
-            var error = UnsafeNativeMethods.CZopfliPNGOptimize(
-                pngData,
-                (UIntPtr)pngDataLength,
-                ref pngOptions,
-                verbose,
-                out var pResultPng,
-                out var resultPngSize);
-
-            if (error != 0)
+            using (var cPngOptions = new CZopfliPNGOptions(pngOptions))
             {
-                return null;
+                var error = UnsafeNativeMethods.CZopfliPNGOptimize(
+                    pngData,
+                    (UIntPtr)pngDataLength,
+                    cPngOptions,
+                    verbose,
+                    out var pResultPng,
+                    out var resultPngSize);
+
+                if (error != 0)
+                {
+                    return null;
+                }
+
+                var resultPng = new byte[(ulong)resultPngSize];
+                Marshal.Copy(pResultPng, resultPng, 0, resultPng.Length);
+
+                // Free malloc() memory from C library
+                Marshal.FreeCoTaskMem(pResultPng);
+
+                return resultPng;
             }
-
-            var resultPng = new byte[(ulong)resultPngSize];
-            Marshal.Copy(pResultPng, resultPng, 0, resultPng.Length);
-
-            // Free malloc() memory from C library
-            Marshal.FreeCoTaskMem(pResultPng);
-
-            return resultPng;
         }
     }
 }
