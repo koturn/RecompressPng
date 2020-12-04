@@ -489,9 +489,11 @@ namespace RecompressPng
         /// <returns>True if two image data are same, otherwise false.</returns>
         private static bool CompareImage(byte[] imgData1, byte[] imgData2)
         {
-            return CompareImage(
-                CreateBitmapFromByteArray(imgData1),
-                CreateBitmapFromByteArray(imgData2));
+            using (var bmp1 = CreateBitmapFromByteArray(imgData1))
+            using (var bmp2 = CreateBitmapFromByteArray(imgData2))
+            {
+                return CompareImage(bmp1, bmp2);
+            }
         }
 
         /// <summary>
@@ -504,9 +506,11 @@ namespace RecompressPng
         /// <returns>True if two image data are same, otherwise false.</returns>
         private static bool CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
         {
-            return CompareImage(
-                CreateBitmapFromByteArray(imgData1, imgDataLength1),
-                CreateBitmapFromByteArray(imgData2, imgDataLength2));
+            using (var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1))
+            using (var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2))
+            {
+                return CompareImage(bmp1, bmp2);
+            }
         }
 
         /// <summary>
