@@ -88,18 +88,18 @@ namespace RecompressPng
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", 5);
             ap.Add('s', "strategies", OptionType.RequiredArgument,
                 "Filter strategies to try\n"
-                + ap.IndentString + ap.IndentString + "0: Strategy Zero\n"
-                + ap.IndentString + ap.IndentString + "1: Strategy One\n"
-                + ap.IndentString + ap.IndentString + "2: Strategy Two\n"
-                + ap.IndentString + ap.IndentString + "3: Strategy Three\n"
-                + ap.IndentString + ap.IndentString + "4: Strategy Four\n"
-                + ap.IndentString + ap.IndentString + "5: Strategy Min, Sum.\n"
-                + ap.IndentString + ap.IndentString + "6: Strategy Entropy\n"
-                + ap.IndentString + ap.IndentString + "7: Strategy Predefined\n"
-                + ap.IndentString + ap.IndentString + "8: Strategy Brute Force"
+                + ap.IndentString + ap.IndentString + "0: Give all scanlines PNG filter type 0\n"
+                + ap.IndentString + ap.IndentString + "1: Give all scanlines PNG filter type 1\n"
+                + ap.IndentString + ap.IndentString + "2: Give all scanlines PNG filter type 2\n"
+                + ap.IndentString + ap.IndentString + "3: Give all scanlines PNG filter type 3\n"
+                + ap.IndentString + ap.IndentString + "4: Give all scanlines PNG filter type 4\n"
+                + ap.IndentString + ap.IndentString + "5: Minimum sum\n"
+                + ap.IndentString + ap.IndentString + "6: Entropy\n"
+                + ap.IndentString + ap.IndentString + "7: Predefined (keep from input, this likely overlaps another strategy)\n"
+                + ap.IndentString + ap.IndentString + "8: Brute force (experimental)"
                 , "[0|1|2|3|4|5|6|7|8],...");
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
-            ap.Add("lossy-transparent", "Allow altering hidden colors of fully transparent pixels.");
+            ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("overwrite", "Overwrite original files.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
