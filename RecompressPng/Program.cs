@@ -492,7 +492,8 @@ namespace RecompressPng
             using (var bmp1 = CreateBitmapFromByteArray(imgData1))
             using (var bmp2 = CreateBitmapFromByteArray(imgData2))
             {
-                return CompareImage(bmp1, bmp2);
+                return CompareImage(bmp1, bmp2)
+                    || (imgData1.Length == imgData2.Length && CompareMemory(imgData1, imgData2));
             }
         }
 
@@ -509,7 +510,8 @@ namespace RecompressPng
             using (var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1))
             using (var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2))
             {
-                return CompareImage(bmp1, bmp2);
+                return CompareImage(bmp1, bmp2)
+                    || (imgData1.Length == imgData2.Length && CompareMemory(imgData1, imgData2, imgData1.Length));
             }
         }
 
@@ -564,11 +566,30 @@ namespace RecompressPng
         /// <returns>True if two byte data is same, otherwise false.</returns>
         private static bool CompareMemory(byte[] data1, byte[] data2)
         {
-            if (data1.Length != data2.Length)
+            if (data1.LongLength != data2.LongLength)
             {
                 return false;
             }
-            for (int i = 0; i < data1.Length; i++)
+            for (long i = 0; i < data1.LongLength; i++)
+            {
+                if (data1[i] != data2[i])
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Compare two byte data.
+        /// </summary>
+        /// <param name="data1">First byte data array.</param>
+        /// <param name="data2">Second byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="data1"/> and <paramref name="data2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        private static bool CompareMemory(byte[] data1, byte[] data2, long dataLength)
+        {
+            for (long i = 0; i < dataLength; i++)
             {
                 if (data1[i] != data2[i])
                 {
