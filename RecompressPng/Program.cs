@@ -544,23 +544,64 @@ namespace RecompressPng
                 return false;
             }
 
-            unsafe
-            {
-                var p1 = (byte*)bd1.Scan0;
-                var p2 = (byte*)bd2.Scan0;
-                var img1ByteLength = bd1.Stride * bd1.Height;
-                for (int i = 0; i < img1ByteLength; i++)
-                {
-                    if (p1[i] != p2[i])
-                    {
-                        return false;
-                    }
-                }
-            }
+            var isSameImageData = CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
 
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
+            return isSameImageData;
+        }
+
+        /// <summary>
+        /// Compare two byte data.
+        /// </summary>
+        /// <param name="data1">First byte data array.</param>
+        /// <param name="data2">Second byte data array.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        private static bool CompareMemory(byte[] data1, byte[] data2)
+        {
+            if (data1.Length != data2.Length)
+            {
+                return false;
+            }
+            for (int i = 0; i < data1.Length; i++)
+            {
+                if (data1[i] != data2[i])
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Compare two byte data.
+        /// </summary>
+        /// <param name="pData1">First byte data array.</param>
+        /// <param name="pData2">Second byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        private static unsafe bool CompareMemory(IntPtr pData1, IntPtr pData2, long dataLength)
+        {
+            return CompareMemory((byte*)pData1, (byte*)pData2, dataLength);
+        }
+
+        /// <summary>
+        /// Compare two byte data.
+        /// </summary>
+        /// <param name="pData1">First byte data array.</param>
+        /// <param name="pData2">Second byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        private static unsafe bool CompareMemory(byte* pData1, byte* pData2, long dataLength)
+        {
+            for (long i = 0; i < dataLength; i++)
+            {
+                if (pData1[i] != pData2[i])
+                {
+                    return false;
+                }
+            }
             return true;
         }
 
