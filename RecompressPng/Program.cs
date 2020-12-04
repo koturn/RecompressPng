@@ -45,14 +45,14 @@ namespace RecompressPng
         /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
-            var (target, pngOptions, nThreads, isOverwrite) = ParseCommadLineArguments(args);
+            var (target, pngOptions, nThreads, isOverwrite, isReplaceForce) = ParseCommadLineArguments(args);
             ShowCompressOptions(pngOptions);
 
             if (File.Exists(target))
             {
                 if (IsZipFile(target))
                 {
-                    RecompressPngInZipArchive(target, null, pngOptions, nThreads, isOverwrite);
+                    RecompressPngInZipArchive(target, null, pngOptions, nThreads, isOverwrite, isReplaceForce);
                 }
                 else
                 {
@@ -62,7 +62,7 @@ namespace RecompressPng
             }
             else if (Directory.Exists(target))
             {
-                RecompressPngInDirectory(target, null, pngOptions, nThreads, isOverwrite);
+                RecompressPngInDirectory(target, null, pngOptions, nThreads, isOverwrite, isReplaceForce);
             }
             else
             {
@@ -78,7 +78,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="args">Command-line arguments</param>
         /// <returns>Parse result tuple.</returns>
-        private static (string Target, ZopfliPNGOptions PngOptions, int NumberOfThreads, bool IsOverwrite) ParseCommadLineArguments(string[] args)
+        private static (string Target, ZopfliPNGOptions PngOptions, int NumberOfThreads, bool IsOverwrite, bool IsReplaceForce) ParseCommadLineArguments(string[] args)
         {
             var ap = new ArgumentParser()
             {
@@ -102,6 +102,7 @@ namespace RecompressPng
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("overwrite", "Overwrite original files.");
+            ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.AddHelp();
@@ -143,7 +144,7 @@ namespace RecompressPng
                 zo.NumFilterStrategies = zo.FilterStrategies.Length;
             }
 
-            return (targets[0], zo, ap.Get<int>('n'), ap.Get<bool>("overwrite"));
+            return (targets[0], zo, ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'));
         }
 
         /// <summary>
@@ -175,7 +176,8 @@ namespace RecompressPng
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
         /// <param name="isOverwrite">Overwrite PNG files in the zip archive file.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false)
+        /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false, bool isReplaceForce = false)
         {
             if (dstZipFilePath == null)
             {
@@ -255,7 +257,23 @@ namespace RecompressPng
                             dataLength,
                             pngOptions);
 
-                        if (isOverwrite)
+                        var isUseNewData = (compressedData.Length <= data.Length || isReplaceForce);
+                        if (!isOverwrite)
+                        {
+                            lock (dstLock)
+                            {
+                                var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                var targetData = isUseNewData ? compressedData : data;
+                                using (var dstZs = dstEntry.Open())
+                                {
+                                    dstZs.Write(targetData, 0, targetData.Length);
+                                }
+                                // Keep original timestamp
+                                dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                                nProcPngFiles++;
+                            }
+                        }
+                        else if (isUseNewData)
                         {
                             var lastWriteTime = srcEntry.LastWriteTime;
                             lock (srcLock)
@@ -269,20 +287,6 @@ namespace RecompressPng
                                 }
                                 // Keep original timestamp
                                 srcEntry.LastWriteTime = lastWriteTime;
-                                nProcPngFiles++;
-                            }
-                        }
-                        else
-                        {
-                            lock (dstLock)
-                            {
-                                var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                using (var dstZs = dstEntry.Open())
-                                {
-                                    dstZs.Write(compressedData, 0, compressedData.Length);
-                                }
-                                // Keep original timestamp
-                                dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                                 nProcPngFiles++;
                             }
                         }
@@ -333,7 +337,8 @@ namespace RecompressPng
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="nThreads">Number of threads for re-compressing.</param>
         /// <param name="isOverwrite">Overwrite PNG files in the directory.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false)
+        /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
+        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, int nThreads, bool isOverwrite = false, bool isReplaceForce = false)
         {
             if (dstDirPath == null)
             {
@@ -375,7 +380,14 @@ namespace RecompressPng
                     // Take a long time
                     var compressedData = ZopfliPng.OptimizePng(data, pngOptions);
 
-                    File.WriteAllBytes(dstFilePath, compressedData);
+                    if (compressedData.Length <= data.Length || isReplaceForce)
+                    {
+                        File.WriteAllBytes(dstFilePath, compressedData);
+                    }
+                    else
+                    {
+                        File.Copy(srcFilePath, dstFilePath, true);
+                    }
 
                     // Keep original timestamp
                     new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
