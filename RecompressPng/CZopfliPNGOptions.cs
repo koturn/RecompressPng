@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+
 
 namespace RecompressPng
 {
@@ -36,7 +38,7 @@ namespace RecompressPng
         /// <para>PNG chunks to keep</para>
         /// <para>chunks to literally copy over from the original PNG to the resulting one.</para>
         /// </summary>
-        public string[] KeepChunks { get; set; }
+        public IntPtr KeepChunksPointer { get; set; }
         /// <summary>
         /// How many entries in keepchunks.
         /// </summary>
@@ -83,7 +85,7 @@ namespace RecompressPng
             FilterStrategiesPointer = IntPtr.Zero;
             NumFilterStrategies = 0;
             AutoFilterStrategy = autoFilterStrategy;
-            KeepChunks = null;
+            KeepChunksPointer = IntPtr.Zero;
             NumKeepChunks = 0;
             UseZopfli = useZopfli;
             NumIterations = numIterations;
@@ -107,6 +109,8 @@ namespace RecompressPng
             var filterStrategies = pngOptions.FilterStrategies;
             var filterStrategiesCount = filterStrategies.Count;
             FilterStrategiesPointer = Marshal.AllocCoTaskMem(sizeof(ZopfliPNGFilterStrategy) * filterStrategiesCount);
+            NumFilterStrategies = filterStrategies.Count;
+
             unsafe
             {
                 var p = (ZopfliPNGFilterStrategy*)FilterStrategiesPointer;
@@ -115,9 +119,30 @@ namespace RecompressPng
                     p[i] = filterStrategies[i];
                 }
             }
-            NumFilterStrategies = filterStrategies.Count;
+
             var keepChunks = pngOptions.KeepChunks;
-            KeepChunks = keepChunks.ToArray();
+            var totalKeepChunkMemorySize = keepChunks.Aggregate(0, (acc, keepChunk) => acc + (keepChunk.Length + 1) * sizeof(char));
+            unsafe
+            {
+                // Memory:
+                //   p_i: Pointer to c_i.
+                //   c_i: Null-terminate string.
+                //   [p_0][p_1][p_2]...[p_n][c_1][c_2][c_3]...[c_n]
+                KeepChunksPointer = Marshal.AllocCoTaskMem(keepChunks.Count * sizeof(IntPtr) + totalKeepChunkMemorySize);
+                var keepChunksCount = keepChunks.Count;
+                var p = (byte**)KeepChunksPointer;
+                var q = (byte*)(p + keepChunksCount);
+
+                for (int i = 0; i < keepChunksCount; i++)
+                {
+                    p[i] = q;
+                    foreach (var c in Encoding.ASCII.GetBytes(keepChunks[i]))
+                    {
+                        *q++ = c;
+                    }
+                    *q++ = 0;  // Null-terminate
+                }
+            }
             NumKeepChunks = keepChunks.Count;
         }
 
@@ -140,6 +165,10 @@ namespace RecompressPng
             if (FilterStrategiesPointer != null)
             {
                 Marshal.FreeCoTaskMem(FilterStrategiesPointer);
+            }
+            if (KeepChunksPointer != null)
+            {
+                Marshal.FreeCoTaskMem(KeepChunksPointer);
             }
         }
     }

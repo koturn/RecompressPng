@@ -132,9 +132,10 @@ namespace RecompressPng
                 cPngOptions.NumIterationsLarge);
 
 
-            if (cPngOptions.FilterStrategiesPointer != IntPtr.Zero)
+
+            unsafe
             {
-                unsafe
+                if (cPngOptions.FilterStrategiesPointer != IntPtr.Zero)
                 {
                     var pFilterStrategies = (int*)cPngOptions.FilterStrategiesPointer;
                     for (int i = 0, im = cPngOptions.NumFilterStrategies; i < im; i++)
@@ -142,10 +143,14 @@ namespace RecompressPng
                         obj.FilterStrategies.Add((ZopfliPNGFilterStrategy)pFilterStrategies[i]);
                     }
                 }
-            }
-            if (cPngOptions.KeepChunks != null)
-            {
-                obj.KeepChunks.AddRange(cPngOptions.KeepChunks);
+                if (cPngOptions.KeepChunksPointer != IntPtr.Zero)
+                {
+                    var pKeepChunks = (sbyte**)cPngOptions.KeepChunksPointer;
+                    for (int i = 0, im = cPngOptions.NumKeepChunks; i < im; i++)
+                    {
+                        obj.KeepChunks.Add(new string(pKeepChunks[i]));
+                    }
+                }
             }
 
             return obj;

@@ -84,23 +84,33 @@ namespace RecompressPng
             {
                 Description = "<<< PNG Re-compressor using zopflipng >>>"
             };
+            var indent1 = ap.IndentString;
+            var indent2 = indent1 + indent1;
+            var indent3 = indent2 + indent1;
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", 15);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", 5);
             ap.Add('s', "strategies", OptionType.RequiredArgument,
                 "Filter strategies to try\n"
-                + ap.IndentString + ap.IndentString + "0: Give all scanlines PNG filter type 0\n"
-                + ap.IndentString + ap.IndentString + "1: Give all scanlines PNG filter type 1\n"
-                + ap.IndentString + ap.IndentString + "2: Give all scanlines PNG filter type 2\n"
-                + ap.IndentString + ap.IndentString + "3: Give all scanlines PNG filter type 3\n"
-                + ap.IndentString + ap.IndentString + "4: Give all scanlines PNG filter type 4\n"
-                + ap.IndentString + ap.IndentString + "5: Minimum sum\n"
-                + ap.IndentString + ap.IndentString + "6: Entropy\n"
-                + ap.IndentString + ap.IndentString + "7: Predefined (keep from input, this likely overlaps another strategy)\n"
-                + ap.IndentString + ap.IndentString + "8: Brute force (experimental)"
-                , "[0|1|2|3|4|5|6|7|8],...");
+                + indent2 + "0: Give all scanlines PNG filter type 0\n"
+                + indent2 + "1: Give all scanlines PNG filter type 1\n"
+                + indent2 + "2: Give all scanlines PNG filter type 2\n"
+                + indent2 + "3: Give all scanlines PNG filter type 3\n"
+                + indent2 + "4: Give all scanlines PNG filter type 4\n"
+                + indent2 + "5: Minimum sum\n"
+                + indent2 + "6: Entropy\n"
+                + indent2 + "7: Predefined (keep from input, this likely overlaps another strategy)\n"
+                + indent2 + "8: Brute force (experimental)",
+                "[0|1|2|3|4|5|6|7|8],...");
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
+            ap.Add("keep-chunks", OptionType.RequiredArgument,
+                "keep metadata chunks with these names that would normally be removed,\n"
+                    + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
+                    + indent2 + "Due to adding extra data, this increases the result size.\n"
+                    + indent2 + "By default ZopfliPNG only keeps the following chunks because they are essential:\n"
+                    + indent3 + "IHDR, PLTE, tRNS, IDAT and IEND.",
+                "NAME,NAME...");
             ap.Add("overwrite", "Overwrite original files.");
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
@@ -140,6 +150,10 @@ namespace RecompressPng
                 zo.FilterStrategies.AddRange(ap.Get('s')
                     .Split(',')
                     .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token)));
+            }
+            if (ap.Exists("keep-chunks"))
+            {
+                zo.KeepChunks.AddRange(ap.Get("keep-chunks").Split(','));
             }
 
             return (targets[0], zo, ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'));
