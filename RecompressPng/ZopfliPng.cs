@@ -37,10 +37,10 @@ namespace RecompressPng
             [DllImport("zopflipng.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
             [SuppressUnmanagedCodeSecurity]
             public static extern unsafe int CZopfliPNGOptimize(
-                byte[] origPng,
-                UIntPtr origpngSize,
-                CZopfliPNGOptions pngOptions,
-                bool verbose,
+                [In] byte[] origPng,
+                [In] UIntPtr origpngSize,
+                in CZopfliPNGOptions pngOptions,
+                [In] bool verbose,
                 out IntPtr resultPng,
                 out UIntPtr resultpngSize);
         }
@@ -83,7 +83,7 @@ namespace RecompressPng
                 var error = UnsafeNativeMethods.CZopfliPNGOptimize(
                     pngData,
                     (UIntPtr)pngDataLength,
-                    cPngOptions,
+                    in cPngOptions,
                     verbose,
                     out var pResultPng,
                     out var resultPngSize);

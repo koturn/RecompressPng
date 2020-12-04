@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 
 namespace RecompressPng
@@ -51,7 +50,6 @@ namespace RecompressPng
     /// <summary>
     /// Structure of options for zopflipng.
     /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
     public class ZopfliPNGOptions
     {
         /// <summary>
@@ -71,8 +69,8 @@ namespace RecompressPng
         /// </summary>
         public bool AutoFilterStrategy { get; set; }
         /// <summary>
-        /// <para>PNG chunks to keep</para>
-        /// <para>chunks to literally copy over from the original PNG to the resulting one.</para>
+        /// <para>PNG chunks to keep.</para>
+        /// <para>Chunks to literally copy over from the original PNG to the resulting one.</para>
         /// </summary>
         public List<string> KeepChunks { get; }
         /// <summary>
@@ -90,7 +88,7 @@ namespace RecompressPng
 
 
         /// <summary>
-        /// Create option instance for zopflipng with default parameters.
+        /// Create option instance for zopflipng.
         /// </summary>
         /// <param name="lossyTransparent">Allow altering hidden colors of fully transparent pixels.</param>
         /// <param name="lossy8bit">Convert 16-bit per channel images to 8-bit per channel.</param>
@@ -105,15 +103,56 @@ namespace RecompressPng
             bool useZopfli = true,
             int numIterations = 15,
             int numIterationsLarge = 5)
+            : this(lossyTransparent, lossy8bit, null, autoFilterStrategy, null, useZopfli, numIterations, numIterationsLarge)
+        {
+        }
+
+        /// <summary>
+        /// Create option instance for zopflipng.
+        /// </summary>
+        /// <param name="lossyTransparent">Allow altering hidden colors of fully transparent pixels.</param>
+        /// <param name="lossy8bit">Convert 16-bit per channel images to 8-bit per channel.</param>
+        /// <param name="filterStrategies">Filter strategies to try.</param>
+        /// <param name="autoFilterStrategy">Automatically choose filter strategy using less good compression.</param>
+        /// <param name="keepChunks">PNG chunks to keep.</param>
+        /// <param name="useZopfli">Use Zopfli deflate compression.</param>
+        /// <param name="numIterations">Zopfli number of iterations.</param>
+        /// <param name="numIterationsLarge">Zopfli number of iterations on large images.</param>
+        public ZopfliPNGOptions(
+            bool lossyTransparent = false,
+            bool lossy8bit = false,
+            List<ZopfliPNGFilterStrategy> filterStrategies = null,
+            bool autoFilterStrategy = true,
+            List<string> keepChunks = null,
+            bool useZopfli = true,
+            int numIterations = 15,
+            int numIterationsLarge = 5)
         {
             LossyTransparent = lossyTransparent;
             Lossy8bit = lossy8bit;
-            FilterStrategies = new List<ZopfliPNGFilterStrategy>();
+            FilterStrategies = filterStrategies;
             AutoFilterStrategy = autoFilterStrategy;
-            KeepChunks = new List<string>();
+            KeepChunks = keepChunks;
             UseZopfli = useZopfli;
             NumIterations = numIterations;
             NumIterationsLarge = numIterationsLarge;
+        }
+
+        /// <summary>
+        /// Create option instance from <see cref="CZopfliPNGOptions"/>.
+        /// </summary>
+        /// <param name="cPngOptions">Allow altering hidden colors of fully transparent pixels.</param>
+        public ZopfliPNGOptions(in CZopfliPNGOptions cPngOptions)
+            : this(
+                cPngOptions.LossyTransparent,
+                cPngOptions.Lossy8bit,
+                CreateFilterStrategies(cPngOptions.FilterStrategiesPointer, cPngOptions.NumFilterStrategies),
+                cPngOptions.AutoFilterStrategy,
+                CreateKeepChunks(cPngOptions.KeepChunksPointer, cPngOptions.NumKeepChunks),
+                cPngOptions.UseZopfli,
+                cPngOptions.NumIterations,
+                cPngOptions.NumIterationsLarge)
+        {
         }
 
         /// <summary>
@@ -122,36 +161,62 @@ namespace RecompressPng
         /// <returns>Default option value.</returns>
         public static ZopfliPNGOptions GetDefault()
         {
-            var cPngOptions = CZopfliPNGOptions.GetDefault();
-            var obj = new ZopfliPNGOptions(
-                cPngOptions.LossyTransparent,
-                cPngOptions.Lossy8bit,
-                cPngOptions.AutoFilterStrategy,
-                cPngOptions.UseZopfli,
-                cPngOptions.NumIterations,
-                cPngOptions.NumIterationsLarge);
+            using (var cPngOptions = CZopfliPNGOptions.GetDefault())
+            {
+                return new ZopfliPNGOptions(cPngOptions);
+            }
+        }
 
+        /// <summary>
+        /// Create filter strategy list from unmanaged memory in <see cref="CZopfliPNGOptions"/>.
+        /// </summary>
+        /// <param name="filterStrategiesPointer">Unmanaged memory pointer to filter strategies. (<see cref="CZopfliPNGOptions.FilterStrategiesPointer"/>)</param>
+        /// <param name="numFilterStrategies">Number of filter strategies. (Unmanaged memory pointer of <see cref="CZopfliPNGOptions.NumFilterStrategies"/>)</param>
+        /// <returns>Created filter strategy list.</returns>
+        private static List<ZopfliPNGFilterStrategy> CreateFilterStrategies(IntPtr filterStrategiesPointer, int numFilterStrategies)
+        {
+            if (filterStrategiesPointer == IntPtr.Zero || numFilterStrategies == 0)
+            {
+                return new List<ZopfliPNGFilterStrategy>();
+            }
+
+            var filterStrategies = new List<ZopfliPNGFilterStrategy>(numFilterStrategies);
             unsafe
             {
-                if (cPngOptions.FilterStrategiesPointer != IntPtr.Zero)
+                var pFilterStrategies = (ZopfliPNGFilterStrategy*)filterStrategiesPointer;
+                for (int i = 0; i < numFilterStrategies; i++)
                 {
-                    var pFilterStrategies = (int*)cPngOptions.FilterStrategiesPointer;
-                    for (int i = 0, im = cPngOptions.NumFilterStrategies; i < im; i++)
-                    {
-                        obj.FilterStrategies.Add((ZopfliPNGFilterStrategy)pFilterStrategies[i]);
-                    }
-                }
-                if (cPngOptions.KeepChunksPointer != IntPtr.Zero)
-                {
-                    var pKeepChunks = (sbyte**)cPngOptions.KeepChunksPointer;
-                    for (int i = 0, im = cPngOptions.NumKeepChunks; i < im; i++)
-                    {
-                        obj.KeepChunks.Add(new string(pKeepChunks[i]));
-                    }
+                    filterStrategies.Add(pFilterStrategies[i]);
                 }
             }
 
-            return obj;
+            return filterStrategies;
+        }
+
+        /// <summary>
+        /// Create keep chunks list from unmanaged memory in <see cref="CZopfliPNGOptions"/>.
+        /// </summary>
+        /// <param name="keepChunksPointer">Unmanaged memory pointer to keep chunks. (<see cref="CZopfliPNGOptions.KeepChunksPointer"/>)</param>
+        /// <param name="numKeepChunks">Number of keep chunks. (<see cref="CZopfliPNGOptions.NumKeepChunks"/>)</param>
+        /// <returns>Created keep chunks list.</returns>
+        private static List<string> CreateKeepChunks(IntPtr keepChunksPointer, int numKeepChunks)
+        {
+            if (keepChunksPointer == IntPtr.Zero || numKeepChunks == 0)
+            {
+                return new List<string>();
+            }
+
+            var keepChunks = new List<string>(numKeepChunks);
+            unsafe
+            {
+                var pKeepChunks = (sbyte**)keepChunksPointer;
+                for (int i = 0; i < numKeepChunks; i++)
+                {
+                    keepChunks.Add(new string(pKeepChunks[i]));
+                }
+            }
+
+            return keepChunks;
         }
     }
 }

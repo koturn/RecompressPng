@@ -12,7 +12,7 @@ namespace RecompressPng
     /// <para>This structure is used to interact with zopflipng.dll.</para>
     /// </summary>
     /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(ref CZopfliPNGOptions)"/>
-    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGOptimize(byte[], UIntPtr, CZopfliPNGOptions, bool, out IntPtr, out UIntPtr)"/>
+    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGOptimize(byte[], UIntPtr, in CZopfliPNGOptions, bool, out IntPtr, out UIntPtr)"/>
     public struct CZopfliPNGOptions : IDisposable
     {
         /// <summary>
@@ -97,15 +97,15 @@ namespace RecompressPng
         /// <summary>
         /// Create option instance from <see cref="ZopfliPNGOptions"/>.
         /// </summary>
-        /// <param name="pngOptions">Allow altering hidden colors of fully transparent pixels.</param>
+        /// <param name="pngOptions">Instance of <see cref="ZopfliPNGOptions"/>.</param>
         public CZopfliPNGOptions(ZopfliPNGOptions pngOptions)
             : this(
-                  pngOptions.LossyTransparent,
-                  pngOptions.Lossy8bit,
-                  pngOptions.AutoFilterStrategy,
-                  pngOptions.UseZopfli,
-                  pngOptions.NumIterations,
-                  pngOptions.NumIterationsLarge)
+                pngOptions.LossyTransparent,
+                pngOptions.Lossy8bit,
+                pngOptions.AutoFilterStrategy,
+                pngOptions.UseZopfli,
+                pngOptions.NumIterations,
+                pngOptions.NumIterationsLarge)
         {
             SetFilterStrategies(pngOptions.FilterStrategies);
             SetKeepChunks(pngOptions.KeepChunks);
@@ -208,7 +208,7 @@ namespace RecompressPng
                 var keepChunksPointer = Marshal.AllocCoTaskMem(keepChunksCount * sizeof(byte*) + memorySize);
 
                 var p = (byte**)keepChunksPointer;
-                var q = (byte*)(p + keepChunksCount);
+                var q = (byte*)(&p[keepChunksCount]);
                 for (int i = 0; i < keepChunksCount; i++)
                 {
                     p[i] = q;

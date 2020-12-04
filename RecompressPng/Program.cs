@@ -697,7 +697,7 @@ namespace RecompressPng
             /// <returns>True if success to set directory, otherwise false.</returns>
             [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
             [SuppressUnmanagedCodeSecurity]
-            public static extern bool SetDllDirectory(string path);
+            public static extern bool SetDllDirectory([In] string path);
         }
     }
 }
