@@ -103,7 +103,7 @@ namespace RecompressPng
             var indent2 = indent1 + indent1;
             var indent3 = indent2 + indent1;
 
-            ap.Add('c', "--count-only", "Count target PNG files and exit this program.");
+            ap.Add('c', "--count-only", "Show target PNG files and its size. And show the total count and size");
             ap.AddHelp();
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", 15);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", 5);
@@ -491,16 +491,20 @@ namespace RecompressPng
         private static void CountPngInZipArchive(string zipFilePath)
         {
             var totalPngFiles = 0;
+            var totalPngFileSize = 0L;
             using (var archive = ZipFile.OpenRead(zipFilePath))
             {
                 foreach (var entry in archive.Entries.Where(entry => entry.Name.EndsWith(".png")))
                 {
-                    Console.WriteLine(entry.FullName);
+                    var fileSize = entry.Length;
+                    Console.WriteLine($"{entry.FullName}: {ToMiB(fileSize):F3} MiB");
                     totalPngFiles++;
+                    totalPngFileSize += fileSize;
                 }
             }
             Console.WriteLine("- - -");
-            Console.WriteLine("The number of target PNG files: " + totalPngFiles);
+            Console.WriteLine($"The number of target PNG files: {totalPngFiles}");
+            Console.WriteLine($"Total target PNG file size: {ToMiB(totalPngFileSize):F3} MiB");
         }
 
         /// <summary>
@@ -510,15 +514,18 @@ namespace RecompressPng
         private static void CountPngInDirectory(string dirPath)
         {
             var totalPngFiles = 0;
+            var totalPngFileSize = 0L;
             var dirFullPath = Path.GetFullPath(dirPath);
-            foreach (var relFilePath in Directory.EnumerateFiles(dirFullPath, "*.png", SearchOption.AllDirectories)
-                .Select(filePath => ToRelativePath(filePath, dirFullPath)))
+            foreach (var filePath in Directory.EnumerateFiles(dirFullPath, "*.png", SearchOption.AllDirectories))
             {
-                Console.WriteLine(relFilePath);
+                var fileSize = new FileInfo(filePath).Length;
+                Console.WriteLine($"{ToRelativePath(filePath, dirFullPath)}: {ToMiB(fileSize):F3} MiB");
                 totalPngFiles++;
+                totalPngFileSize += fileSize;
             }
             Console.WriteLine("- - -");
-            Console.WriteLine("The number of target PNG files: " + totalPngFiles);
+            Console.WriteLine($"The number of target PNG files: {totalPngFiles}");
+            Console.WriteLine($"Total target PNG file size: {ToMiB(totalPngFileSize):F3} MiB");
         }
 
         /// <summary>
