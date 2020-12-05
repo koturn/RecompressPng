@@ -25,7 +25,7 @@ namespace RecompressPng
         /// <summary>
         /// Date time format for logging.
         /// </summary>
-        const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
+        private const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
 
         /// <summary>
         /// Setup DLL search path.
@@ -52,7 +52,14 @@ namespace RecompressPng
             {
                 if (IsZipFile(target))
                 {
-                    RecompressPngInZipArchive(target, null, pngOptions, execOptions);
+                    if (execOptions.IsCountOnly)
+                    {
+                        CountPngInZipArchive(target);
+                    }
+                    else
+                    {
+                        RecompressPngInZipArchive(target, null, pngOptions, execOptions);
+                    }
                 }
                 else
                 {
@@ -62,7 +69,14 @@ namespace RecompressPng
             }
             else if (Directory.Exists(target))
             {
-                RecompressPngInDirectory(target, null, pngOptions, execOptions);
+                if (execOptions.IsCountOnly)
+                {
+                    CountPngInDirectory(target);
+                }
+                else
+                {
+                    RecompressPngInDirectory(target, null, pngOptions, execOptions);
+                }
             }
             else
             {
@@ -89,6 +103,7 @@ namespace RecompressPng
             var indent2 = indent1 + indent1;
             var indent3 = indent2 + indent1;
 
+            ap.Add('c', "--count-only", "Count target PNG files and exit this program.");
             ap.AddHelp();
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", 15);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", 5);
@@ -160,7 +175,16 @@ namespace RecompressPng
                 zo.KeepChunks.AddRange(ap.Get("keep-chunks").Split(','));
             }
 
-            return (targets[0], zo, new ExecuteOptions(ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'), ap.Get<bool>('v'), !ap.Get<bool>("no-verify-image")));
+            return (
+                targets[0],
+                zo,
+                new ExecuteOptions(
+                    ap.Get<int>('n'),
+                    ap.Get<bool>("overwrite"),
+                    ap.Get<bool>('r'),
+                    ap.Get<bool>('c'),
+                    ap.Get<bool>('v'),
+                    !ap.Get<bool>("no-verify-image")));
         }
 
         /// <summary>
@@ -458,6 +482,43 @@ namespace RecompressPng
                     srcDirPath,
                     Path.Combine(Path.GetDirectoryName(srcDirPath), Path.GetFileNameWithoutExtension(srcDirPath) + ".old"));
             }
+        }
+
+        /// <summary>
+        /// Count PNG files and print its full name in the zip archive file.
+        /// </summary>
+        /// <param name="zipFilePath">Target zip archive file.</param>
+        private static void CountPngInZipArchive(string zipFilePath)
+        {
+            var totalPngFiles = 0;
+            using (var archive = ZipFile.OpenRead(zipFilePath))
+            {
+                foreach (var entry in archive.Entries.Where(entry => entry.Name.EndsWith(".png")))
+                {
+                    Console.WriteLine(entry.FullName);
+                    totalPngFiles++;
+                }
+            }
+            Console.WriteLine("- - -");
+            Console.WriteLine("The number of target PNG files: " + totalPngFiles);
+        }
+
+        /// <summary>
+        /// Count PNG files and print its full name in the directory.
+        /// </summary>
+        /// <param name="dirPath">Target directory path.</param>
+        private static void CountPngInDirectory(string dirPath)
+        {
+            var totalPngFiles = 0;
+            var dirFullPath = Path.GetFullPath(dirPath);
+            foreach (var relFilePath in Directory.EnumerateFiles(dirFullPath, "*.png", SearchOption.AllDirectories)
+                .Select(filePath => ToRelativePath(filePath, dirFullPath)))
+            {
+                Console.WriteLine(relFilePath);
+                totalPngFiles++;
+            }
+            Console.WriteLine("- - -");
+            Console.WriteLine("The number of target PNG files: " + totalPngFiles);
         }
 
         /// <summary>
