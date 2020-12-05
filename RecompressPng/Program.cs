@@ -562,11 +562,11 @@ namespace RecompressPng
 
             var bd1 = img1.LockBits(
                 new Rectangle(0, 0, img1.Width, img1.Height),
-                ImageLockMode.ReadWrite,
+                ImageLockMode.ReadOnly,
                 img1.PixelFormat);
             var bd2 = img2.LockBits(
                 new Rectangle(0, 0, img2.Width, img2.Height),
-                ImageLockMode.ReadWrite,
+                ImageLockMode.ReadOnly,
                 img2.PixelFormat);
 
             if (bd1.Stride != bd2.Stride)

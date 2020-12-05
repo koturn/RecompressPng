@@ -135,11 +135,11 @@ namespace RecompressPng
         /// </summary>
         public void Dispose()
         {
-            if (FilterStrategiesPointer != null)
+            if (FilterStrategiesPointer != IntPtr.Zero)
             {
                 Marshal.FreeCoTaskMem(FilterStrategiesPointer);
             }
-            if (KeepChunksPointer != null)
+            if (KeepChunksPointer != IntPtr.Zero)
             {
                 Marshal.FreeCoTaskMem(KeepChunksPointer);
             }
