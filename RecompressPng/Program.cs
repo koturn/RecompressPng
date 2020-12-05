@@ -23,9 +23,9 @@ namespace RecompressPng
     class Program
     {
         /// <summary>
-        /// Default capacity for <see cref="MemoryStream"/> to read zip archive entries.
+        /// Date time format for logging.
         /// </summary>
-        const int DefaultReadCapacitySize = 4 * 1024 * 1024;
+        const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
 
         /// <summary>
         /// Setup DLL search path.
@@ -245,8 +245,8 @@ namespace RecompressPng
 
                         var sw = Stopwatch.StartNew();
 
-                        var threadId = Thread.CurrentThread.ManagedThreadId;
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} ...");
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
 
                         byte[] data;
                         long dataLength;
@@ -282,7 +282,6 @@ namespace RecompressPng
                                 }
                                 // Keep original timestamp
                                 dstEntry.LastWriteTime = srcEntry.LastWriteTime;
-                                nProcPngFiles++;
                             }
                         }
                         else if (isUseNewData)
@@ -299,7 +298,6 @@ namespace RecompressPng
                                 }
                                 // Keep original timestamp
                                 srcEntry.LastWriteTime = lastWriteTime;
-                                nProcPngFiles++;
                             }
                         }
 
@@ -312,7 +310,7 @@ namespace RecompressPng
                         }
 
                         var verifyResultMsg = isSameImage ? "same image" : "different image";
-                        Console.WriteLine($"[{threadId}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -374,9 +372,9 @@ namespace RecompressPng
                 {
                     var sw = Stopwatch.StartNew();
 
-                    var threadId = Thread.CurrentThread.ManagedThreadId;
+                    var procIndex = Interlocked.Increment(ref nProcPngFiles);
                     var srcRelPath = ToRelativePath(srcFilePath, srcBaseDirFullPath);
-                    Console.WriteLine($"[{threadId}] Compress {srcRelPath} ...");
+                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} ...");
 
                     var dstFilePath = isOverwrite ? srcFilePath : Path.Combine(
                         dstBaseDirFullPath,
@@ -406,7 +404,6 @@ namespace RecompressPng
 
                     Interlocked.Add(ref srcTotalFileSize, data.Length);
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
-                    Interlocked.Increment(ref nProcPngFiles);
 
                     var isSameImage = CompareImage(data, compressedData);
                     if (isSameImage)
@@ -415,7 +412,7 @@ namespace RecompressPng
                     }
 
                     var verifyResultMsg = isSameImage ? "same image" : "different image";
-                    Console.WriteLine($"[{threadId}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
             Console.WriteLine("- - -");
