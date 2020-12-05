@@ -26,6 +26,10 @@
         /// Allow to output to stdout from zopflipng.dll.
         /// </summary>
         public bool Verbose { get; set; }
+        /// <summary>
+        /// Compare two images which is original image and re-compressed image.
+        /// </summary>
+        public bool IsVerifyImage { get; set; }
 
         /// <summary>
         /// Initialize all members.
@@ -34,16 +38,19 @@
         /// <param name="isOverwrite">Overwrite original files.</param>
         /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
         /// <param name="verbose">Allow to output to stdout from zopflipng.dll.</param>
+        /// <param name="isVerifyImage">Compare two images which is original image and re-compressed image.</param>
         public ExecuteOptions(
             int numberOfThreads = DefaultNumberOfThreads,
             bool isOverwrite = false,
             bool isReplaceForce = false,
-            bool verbose = false)
+            bool verbose = false,
+            bool isVerifyImage = true)
         {
             NumberOfThreads = numberOfThreads;
             IsOverwrite = isOverwrite;
             IsReplaceForce = isReplaceForce;
             Verbose = verbose;
+            IsVerifyImage = isVerifyImage;
         }
     }
 }

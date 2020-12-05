@@ -119,6 +119,7 @@ namespace RecompressPng
             ap.Add("overwrite", "Overwrite original files.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
+            ap.Add("no-verify-image", "Don't compare two image data.");
 
             ap.Parse(args);
 
@@ -159,7 +160,7 @@ namespace RecompressPng
                 zo.KeepChunks.AddRange(ap.Get("keep-chunks").Split(','));
             }
 
-            return (targets[0], zo, new ExecuteOptions(ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'), ap.Get<bool>('v')));
+            return (targets[0], zo, new ExecuteOptions(ap.Get<int>('n'), ap.Get<bool>("overwrite"), ap.Get<bool>('r'), ap.Get<bool>('v'), !ap.Get<bool>("no-verify-image")));
         }
 
         /// <summary>
@@ -186,6 +187,7 @@ namespace RecompressPng
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
+            Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
             Console.WriteLine("- - -");
         }
 
@@ -311,14 +313,17 @@ namespace RecompressPng
 
                         // The comparison of image data is considered to take a little longer.
                         // Therefore, atomically incremented nSameImages outside of the lock statement.
-                        var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
-                        if (isSameImage)
+                        var verifyResultMsg = "";
+                        if (execOptions.IsVerifyImage)
                         {
-                            Interlocked.Increment(ref nSameImages);
+                            var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
+                            if (isSameImage)
+                            {
+                                Interlocked.Increment(ref nSameImages);
+                            }
+                            verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
                         }
-
-                        var verifyResultMsg = isSameImage ? "same image" : "different image";
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
                     });
             }
 
@@ -327,13 +332,16 @@ namespace RecompressPng
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
-            if (nProcPngFiles == nSameImages)
+            if (execOptions.IsVerifyImage)
             {
-                Console.WriteLine("All the image data before and after re-compressing are the same.");
-            }
-            else
-            {
-                Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
+                if (nProcPngFiles == nSameImages)
+                {
+                    Console.WriteLine("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
+                }
             }
 
             if (!execOptions.IsOverwrite)
@@ -411,26 +419,36 @@ namespace RecompressPng
                     Interlocked.Add(ref srcTotalFileSize, data.Length);
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
 
-                    var isSameImage = CompareImage(data, compressedData);
-                    if (isSameImage)
+                    var verifyResultMsg = "";
+                    if (execOptions.IsVerifyImage)
                     {
-                        Interlocked.Increment(ref nSameImages);
+                        var isSameImage = CompareImage(data, compressedData);
+                        if (isSameImage)
+                        {
+                            Interlocked.Increment(ref nSameImages);
+                            verifyResultMsg = " (same image)";
+                        }
+                        else
+                        {
+                            verifyResultMsg = " (different image)";
+                        }
                     }
-
-                    var verifyResultMsg = isSameImage ? "same image" : "different image";
-                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB ({verifyResultMsg}) (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
                 });
 
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
-            if (nProcPngFiles == nSameImages)
+            if (execOptions.IsVerifyImage)
             {
-                Console.WriteLine("All the image data before and after re-compressing are the same.");
-            }
-            else
-            {
-                Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
+                if (nProcPngFiles == nSameImages)
+                {
+                    Console.WriteLine("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    Console.WriteLine($"{nProcPngFiles - nSameImages} / {nProcPngFiles} PNG files are different image.");
+                }
             }
 
             if (!execOptions.IsOverwrite)
