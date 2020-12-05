@@ -73,6 +73,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CZopfliPNGOptions.cs" />
+    <Compile Include="ExecuteOptions.cs" />
     <Compile Include="ZopfliPng.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

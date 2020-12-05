@@ -47,11 +47,38 @@ namespace RecompressPng
         BruteForce = 8
     };
 
+
     /// <summary>
     /// Structure of options for zopflipng.
     /// </summary>
     public class ZopfliPNGOptions
     {
+        /// <summary>
+        /// Default value for <see cref="LossyTransparent"/>.
+        /// </summary>
+        public const bool DefaultLossyTransparent = CZopfliPNGOptions.DefaultLossyTransparent;
+        /// <summary>
+        /// Default value for <see cref="Lossy8bit"/>.
+        /// </summary>
+        public const bool DefaultLossy8bit = CZopfliPNGOptions.DefaultLossy8bit;
+        /// <summary>
+        /// Default value for <see cref="AutoFilterStrategy"/>.
+        /// </summary>
+        public const bool DefaultAutoFilterStrategy = CZopfliPNGOptions.DefaultAutoFilterStrategy;
+        /// <summary>
+        /// Default value for <see cref="UseZopfli"/>.
+        /// </summary>
+        public const bool DefaultUseZopfli = CZopfliPNGOptions.DefaultUseZopfli;
+        /// <summary>
+        /// Default value for <see cref="NumIterations"/>.
+        /// </summary>
+        public const int DefaultNumIterations = CZopfliPNGOptions.DefaultNumIterations;
+        /// <summary>
+        /// Default value for <see cref="NumIterationsLarge"/>.
+        /// </summary>
+        public const int DefaultNumIterationsLarge = CZopfliPNGOptions.DefaultNumIterationsLarge;
+
+
         /// <summary>
         /// Allow altering hidden colors of fully transparent pixels.
         /// </summary>
@@ -97,12 +124,12 @@ namespace RecompressPng
         /// <param name="numIterations">Zopfli number of iterations.</param>
         /// <param name="numIterationsLarge">Zopfli number of iterations on large images.</param>
         public ZopfliPNGOptions(
-            bool lossyTransparent = false,
-            bool lossy8bit = false,
-            bool autoFilterStrategy = true,
-            bool useZopfli = true,
-            int numIterations = 15,
-            int numIterationsLarge = 5)
+            bool lossyTransparent = DefaultLossyTransparent,
+            bool lossy8bit = DefaultLossy8bit,
+            bool autoFilterStrategy = DefaultAutoFilterStrategy,
+            bool useZopfli = DefaultUseZopfli,
+            int numIterations = DefaultNumIterations,
+            int numIterationsLarge = DefaultNumIterationsLarge)
             : this(lossyTransparent, lossy8bit, null, autoFilterStrategy, null, useZopfli, numIterations, numIterationsLarge)
         {
         }
@@ -119,20 +146,20 @@ namespace RecompressPng
         /// <param name="numIterations">Zopfli number of iterations.</param>
         /// <param name="numIterationsLarge">Zopfli number of iterations on large images.</param>
         public ZopfliPNGOptions(
-            bool lossyTransparent = false,
-            bool lossy8bit = false,
+            bool lossyTransparent = DefaultLossyTransparent,
+            bool lossy8bit = DefaultLossy8bit,
             List<ZopfliPNGFilterStrategy> filterStrategies = null,
-            bool autoFilterStrategy = true,
+            bool autoFilterStrategy = DefaultAutoFilterStrategy,
             List<string> keepChunks = null,
-            bool useZopfli = true,
-            int numIterations = 15,
-            int numIterationsLarge = 5)
+            bool useZopfli = DefaultUseZopfli,
+            int numIterations = DefaultNumIterations,
+            int numIterationsLarge = DefaultNumIterationsLarge)
         {
             LossyTransparent = lossyTransparent;
             Lossy8bit = lossy8bit;
-            FilterStrategies = filterStrategies;
+            FilterStrategies = filterStrategies ?? new List<ZopfliPNGFilterStrategy>();
             AutoFilterStrategy = autoFilterStrategy;
-            KeepChunks = keepChunks;
+            KeepChunks = keepChunks ?? new List<string>();
             UseZopfli = useZopfli;
             NumIterations = numIterations;
             NumIterationsLarge = numIterationsLarge;

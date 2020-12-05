@@ -16,6 +16,31 @@ namespace RecompressPng
     public struct CZopfliPNGOptions : IDisposable
     {
         /// <summary>
+        /// Default value for <see cref="LossyTransparent"/>.
+        /// </summary>
+        public const bool DefaultLossyTransparent = false;
+        /// <summary>
+        /// Default value for <see cref="Lossy8bit"/>.
+        /// </summary>
+        public const bool DefaultLossy8bit = false;
+        /// <summary>
+        /// Default value for <see cref="AutoFilterStrategy"/>.
+        /// </summary>
+        public const bool DefaultAutoFilterStrategy = true;
+        /// <summary>
+        /// Default value for <see cref="UseZopfli"/>.
+        /// </summary>
+        public const bool DefaultUseZopfli = true;
+        /// <summary>
+        /// Default value for <see cref="NumIterations"/>.
+        /// </summary>
+        public const int DefaultNumIterations = 15;
+        /// <summary>
+        /// Default value for <see cref="NumIterationsLarge"/>.
+        /// </summary>
+        public const int DefaultNumIterationsLarge = 5;
+
+        /// <summary>
         /// Allow altering hidden colors of fully transparent pixels.
         /// </summary>
         public bool LossyTransparent { get; set; }
@@ -74,12 +99,12 @@ namespace RecompressPng
         /// <param name="numIterations">Zopfli number of iterations.</param>
         /// <param name="numIterationsLarge">Zopfli number of iterations on large images.</param>
         public CZopfliPNGOptions(
-            bool lossyTransparent = false,
-            bool lossy8bit = false,
-            bool autoFilterStrategy = true,
-            bool useZopfli = true,
-            int numIterations = 15,
-            int numIterationsLarge = 5)
+            bool lossyTransparent = DefaultLossyTransparent,
+            bool lossy8bit = DefaultLossy8bit,
+            bool autoFilterStrategy = DefaultAutoFilterStrategy,
+            bool useZopfli = DefaultUseZopfli,
+            int numIterations = DefaultNumIterations,
+            int numIterationsLarge = DefaultNumIterationsLarge)
         {
             LossyTransparent = lossyTransparent;
             Lossy8bit = lossy8bit;
@@ -203,7 +228,7 @@ namespace RecompressPng
                 // Memory:
                 //   p_i: Pointer to c_i.
                 //   c_i: Null-terminate string.
-                //   [p_0][p_1][p_2]...[p_n][c_1][c_2][c_3]...[c_n]
+                //   [p_0][p_1][p_2]...[p_n][c_0][c_1][c_2]...[c_n]
                 var keepChunksCount = keepChunks.Count;
                 var keepChunksPointer = Marshal.AllocCoTaskMem(keepChunksCount * sizeof(byte*) + memorySize);
 
