@@ -598,8 +598,7 @@ namespace RecompressPng
             using (var bmp1 = CreateBitmapFromByteArray(imgData1))
             using (var bmp2 = CreateBitmapFromByteArray(imgData2))
             {
-                return CompareImage(bmp1, bmp2)
-                    || (imgData1.Length == imgData2.Length && CompareMemory(imgData1, imgData2));
+                return CompareImage(bmp1, bmp2) || CompareMemory(imgData1, imgData2);
             }
         }
 
@@ -617,7 +616,7 @@ namespace RecompressPng
             using (var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2))
             {
                 return CompareImage(bmp1, bmp2)
-                    || (imgData1.Length == imgData2.Length && CompareMemory(imgData1, imgData2, imgData1.Length));
+                    || (imgData1.LongLength == imgData2.LongLength && CompareMemory(imgData1, imgData2, imgData1.Length));
             }
         }
 
