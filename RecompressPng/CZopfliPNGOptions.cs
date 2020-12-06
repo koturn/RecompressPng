@@ -142,6 +142,7 @@ namespace RecompressPng
         /// <param name="filterStrategies">List of filter strategies.</param>
         public void SetFilterStrategies(List<ZopfliPNGFilterStrategy> filterStrategies)
         {
+            DisposeFilterStrategies();
             (FilterStrategiesPointer, NumFilterStrategies) = CreateFilterStrategies(filterStrategies);
         }
 
@@ -151,23 +152,45 @@ namespace RecompressPng
         /// <param name="keepChunks">List of chunk names.</param>
         public void SetKeepChunks(List<string> keepChunks)
         {
+            DisposeKeepChunks();
             (KeepChunksPointer, NumKeepChunks) = CreateKeepChunks(keepChunks);
         }
 
+        /// <summary>
+        /// <para>Free the allocated memory for <see cref="FilterStrategiesPointer"/> and set to <see cref="IntPtr.Zero"/>.</para>
+        /// <para>Similarly, set <see cref="NumFilterStrategies"/> to 0.</para>
+        /// </summary>
+        public void DisposeFilterStrategies()
+        {
+            if (FilterStrategiesPointer != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(FilterStrategiesPointer);
+                FilterStrategiesPointer = IntPtr.Zero;
+            }
+            NumFilterStrategies = 0;
+        }
+
+        /// <summary>
+        /// <para>Free the allocated memory for <see cref="KeepChunksPointer"/> and set to <see cref="IntPtr.Zero"/>.</para>
+        /// <para>Similarly, set <see cref="NumKeepChunks"/> to 0.</para>
+        /// </summary>
+        public void DisposeKeepChunks()
+        {
+            if (KeepChunksPointer != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(KeepChunksPointer);
+                KeepChunksPointer = IntPtr.Zero;
+            }
+            NumKeepChunks = 0;
+        }
 
         /// <summary>
         /// Dispose resource of <see cref="FilterStrategiesPointer"/>.
         /// </summary>
         public void Dispose()
         {
-            if (FilterStrategiesPointer != IntPtr.Zero)
-            {
-                Marshal.FreeCoTaskMem(FilterStrategiesPointer);
-            }
-            if (KeepChunksPointer != IntPtr.Zero)
-            {
-                Marshal.FreeCoTaskMem(KeepChunksPointer);
-            }
+            DisposeFilterStrategies();
+            DisposeKeepChunks();
         }
 
         /// <summary>
@@ -180,6 +203,7 @@ namespace RecompressPng
             ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(ref cPngOptions);
             return cPngOptions;
         }
+
 
         /// <summary>
         /// Allocate and write filter strategies data.
