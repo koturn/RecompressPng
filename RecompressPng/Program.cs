@@ -255,22 +255,12 @@ namespace RecompressPng
                             {
                                 return;
                             }
-                            using (var ms = new MemoryStream((int)srcEntry.Length))
+                            var origData = ReadAllBytes(srcEntry, srcLock);
+                            lock (dstLock)
                             {
-                                lock (srcLock)
+                                using (var dstZs = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal).Open())
                                 {
-                                    using (var srcZs = srcEntry.Open())
-                                    {
-                                        srcZs.CopyTo(ms);
-                                    }
-                                }
-                                lock (dstLock)
-                                {
-                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                    using (var dstZs = dstEntry.Open())
-                                    {
-                                        ms.CopyTo(dstZs);
-                                    }
+                                    dstZs.Write(origData, 0, origData.Length);
                                 }
                             }
                             return;
@@ -281,25 +271,12 @@ namespace RecompressPng
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
 
-                        byte[] data;
-                        long dataLength;
-                        using (var ms = new MemoryStream((int)srcEntry.Length))
-                        {
-                            lock (srcLock)
-                            {
-                                using (var srcZs = srcEntry.Open())
-                                {
-                                    srcZs.CopyTo(ms);
-                                }
-                            }
-                            data = ms.GetBuffer();
-                            dataLength = ms.Length;
-                        }
+                        var data = ReadAllBytes(srcEntry, srcLock);
 
                         // Take a long time
                         var compressedData = ZopfliPng.OptimizePng(
                             data,
-                            dataLength,
+                            data.LongLength,
                             pngOptions,
                             execOptions.Verbose);
 
@@ -340,14 +317,14 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
+                            var isSameImage = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
                             if (isSameImage)
                             {
                                 Interlocked.Increment(ref nSameImages);
                             }
                             verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
                         }
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(dataLength, compressedData.Length) * 100.0:F2}%)");
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                     });
             }
 
@@ -444,7 +421,7 @@ namespace RecompressPng
                             verifyResultMsg = " (different image)";
                         }
                     }
-                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.Length):F3} MiB -> {ToMiB(compressedData.Length):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.Length, compressedData.Length) * 100.0:F2}%)");
+                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                 });
 
             Console.WriteLine("- - -");
@@ -534,6 +511,25 @@ namespace RecompressPng
             return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
                 .MakeRelativeUri(new Uri(Path.GetFullPath(targetPath))).ToString())
                 .Replace('/', '\\');
+        }
+
+        /// <summary>
+        /// Read all data from <see cref="ZipArchiveEntry"/>.
+        /// </summary>
+        /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
+        /// <param name="lockObj">The object for lock.</param>
+        /// <returns>Read data.</returns>
+        private static byte[] ReadAllBytes(ZipArchiveEntry entry, object lockObj)
+        {
+            var data = new byte[entry.Length];
+            lock (lockObj)
+            {
+                using (var zs = entry.Open())
+                {
+                    zs.Read(data, 0, data.Length);
+                }
+            }
+            return data;
         }
 
         /// <summary>
