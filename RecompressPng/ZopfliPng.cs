@@ -22,7 +22,7 @@ namespace RecompressPng
             /// <param name="pngOptions">Options struct for zopflipng.</param>
             [DllImport("zopflipng.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
             [SuppressUnmanagedCodeSecurity]
-            public static extern void CZopfliPNGSetDefaults(ref CZopfliPNGOptions pngOptions);
+            public static extern void CZopfliPNGSetDefaults(out CZopfliPNGOptions pngOptions);
 
             /// <summary>
             /// Re-compress deflated data in PNG with zopfli algorithm.

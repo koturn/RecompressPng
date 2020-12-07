@@ -11,7 +11,7 @@ namespace RecompressPng
     /// <para>Option value for zopflipng.</para>
     /// <para>This structure is used to interact with zopflipng.dll.</para>
     /// </summary>
-    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(ref CZopfliPNGOptions)"/>
+    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(out CZopfliPNGOptions)"/>
     /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGOptimize(byte[], UIntPtr, in CZopfliPNGOptions, bool, out IntPtr, out UIntPtr)"/>
     public struct CZopfliPNGOptions : IDisposable
     {
@@ -199,8 +199,7 @@ namespace RecompressPng
         /// <returns>Default option value.</returns>
         public static CZopfliPNGOptions GetDefault()
         {
-            var cPngOptions = new CZopfliPNGOptions();
-            ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(ref cPngOptions);
+            ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(out var cPngOptions);
             return cPngOptions;
         }
 
