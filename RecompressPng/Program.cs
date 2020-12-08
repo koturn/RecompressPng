@@ -38,6 +38,12 @@ namespace RecompressPng
                     Environment.Is64BitProcess ? "x64" : "x86"));
         }
 
+
+        /// <summary>
+        /// Memory comparator.
+        /// </summary>
+        private static MemoryComparator _memoryComparator;
+
         /// <summary>
         /// An entry point of this program.
         /// </summary>
@@ -48,40 +54,48 @@ namespace RecompressPng
             var (target, pngOptions, execOptions) = ParseCommadLineArguments(args);
             ShowParameters(pngOptions, execOptions);
 
-            if (File.Exists(target))
+            try
             {
-                if (IsZipFile(target))
+                _memoryComparator = new MemoryComparator();
+                if (File.Exists(target))
                 {
-                    if (execOptions.IsCountOnly)
+                    if (IsZipFile(target))
                     {
-                        CountPngInZipArchive(target);
+                        if (execOptions.IsCountOnly)
+                        {
+                            CountPngInZipArchive(target);
+                        }
+                        else
+                        {
+                            RecompressPngInZipArchive(target, null, pngOptions, execOptions);
+                        }
                     }
                     else
                     {
-                        RecompressPngInZipArchive(target, null, pngOptions, execOptions);
+                        Console.Error.WriteLine("Specified file is not zip archive");
+                        return 1;
+                    }
+                }
+                else if (Directory.Exists(target))
+                {
+                    if (execOptions.IsCountOnly)
+                    {
+                        CountPngInDirectory(target);
+                    }
+                    else
+                    {
+                        RecompressPngInDirectory(target, null, pngOptions, execOptions);
                     }
                 }
                 else
                 {
-                    Console.Error.WriteLine("Specified file is not zip archive");
+                    Console.Error.WriteLine("Specified file doesn't exist");
                     return 1;
                 }
             }
-            else if (Directory.Exists(target))
+            finally
             {
-                if (execOptions.IsCountOnly)
-                {
-                    CountPngInDirectory(target);
-                }
-                else
-                {
-                    RecompressPngInDirectory(target, null, pngOptions, execOptions);
-                }
-            }
-            else
-            {
-                Console.Error.WriteLine("Specified file doesn't exist");
-                return 1;
+                _memoryComparator?.Dispose();
             }
 
             return 0;
@@ -593,7 +607,7 @@ namespace RecompressPng
             using (var bmp1 = CreateBitmapFromByteArray(imgData1))
             using (var bmp2 = CreateBitmapFromByteArray(imgData2))
             {
-                return CompareImage(bmp1, bmp2) || CompareMemory(imgData1, imgData2);
+                return CompareImage(bmp1, bmp2) || _memoryComparator.CompareMemory(imgData1, imgData2);
             }
         }
 
@@ -611,7 +625,7 @@ namespace RecompressPng
             using (var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2))
             {
                 return CompareImage(bmp1, bmp2)
-                    || (imgData1.LongLength == imgData2.LongLength && CompareMemory(imgData1, imgData2, imgData1.Length));
+                    || (imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length));
             }
         }
 
@@ -650,84 +664,12 @@ namespace RecompressPng
                 return false;
             }
 
-            var isSameImageData = CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
+            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
 
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
             return isSameImageData;
-        }
-
-        /// <summary>
-        /// Compare two byte data.
-        /// </summary>
-        /// <param name="data1">First byte data array.</param>
-        /// <param name="data2">Second byte data array.</param>
-        /// <returns>True if two byte data is same, otherwise false.</returns>
-        private static bool CompareMemory(byte[] data1, byte[] data2)
-        {
-            if (data1.LongLength != data2.LongLength)
-            {
-                return false;
-            }
-            for (long i = 0; i < data1.LongLength; i++)
-            {
-                if (data1[i] != data2[i])
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Compare two byte data.
-        /// </summary>
-        /// <param name="data1">First byte data array.</param>
-        /// <param name="data2">Second byte data array.</param>
-        /// <param name="dataLength">Data length of <paramref name="data1"/> and <paramref name="data2"/>.</param>
-        /// <returns>True if two byte data is same, otherwise false.</returns>
-        private static bool CompareMemory(byte[] data1, byte[] data2, long dataLength)
-        {
-            for (long i = 0; i < dataLength; i++)
-            {
-                if (data1[i] != data2[i])
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Compare two byte data.
-        /// </summary>
-        /// <param name="pData1">First byte data array.</param>
-        /// <param name="pData2">Second byte data array.</param>
-        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
-        /// <returns>True if two byte data is same, otherwise false.</returns>
-        private static unsafe bool CompareMemory(IntPtr pData1, IntPtr pData2, long dataLength)
-        {
-            return CompareMemory((byte*)pData1, (byte*)pData2, dataLength);
-        }
-
-        /// <summary>
-        /// Compare two byte data.
-        /// </summary>
-        /// <param name="pData1">First byte data array.</param>
-        /// <param name="pData2">Second byte data array.</param>
-        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
-        /// <returns>True if two byte data is same, otherwise false.</returns>
-        private static unsafe bool CompareMemory(byte* pData1, byte* pData2, long dataLength)
-        {
-            for (long i = 0; i < dataLength; i++)
-            {
-                if (pData1[i] != pData2[i])
-                {
-                    return false;
-                }
-            }
-            return true;
         }
 
         /// <summary>
