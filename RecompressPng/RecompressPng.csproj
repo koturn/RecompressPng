@@ -87,6 +87,10 @@
       <Project>{5a9465f9-4ead-4d52-84c3-5d673fda739f}</Project>
       <Name>ArgumentParserNetStd</Name>
     </ProjectReference>
+    <ProjectReference Include="..\NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj">
+      <Project>{21557920-be91-42a5-866c-04570dff5ab8}</Project>
+      <Name>NativeCodeSharp</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
