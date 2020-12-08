@@ -23,6 +23,10 @@
         /// </summary>
         public bool IsReplaceForce { get; set; }
         /// <summary>
+        /// Keep timestamp of original file.
+        /// </summary>
+        public bool IsKeepTimestamp { get; set; }
+        /// <summary>
         /// Don't save any files, just see the console output.
         /// </summary>
         public bool IsDryRun { get; set; }
@@ -52,6 +56,7 @@
         /// <param name="numberOfThreads">Number of threads for re-compressing. -1 means unlimited.</param>
         /// <param name="isOverwrite">Overwrite original files.</param>
         /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
+        /// <param name="isKeepTimestamp">Keep timestamp of original file.</param>
         /// <param name="isDryRun">Don't save any files, just see the console output.</param>
         /// <param name="isCountOnly">Count target PNG files and exit this program.</param>
         /// <param name="verbose">Allow to output to stdout from zopflipng.dll.</param>
@@ -60,6 +65,7 @@
             int numberOfThreads = DefaultNumberOfThreads,
             bool isOverwrite = false,
             bool isReplaceForce = false,
+            bool isKeepTimestamp = true,
             bool isDryRun = false,
             bool isCountOnly = false,
             bool verbose = false,
@@ -68,6 +74,7 @@
             NumberOfThreads = numberOfThreads;
             IsOverwrite = isOverwrite;
             IsReplaceForce = isReplaceForce;
+            IsKeepTimestamp = isKeepTimestamp;
             IsDryRun = isDryRun;
             IsCountOnly = isCountOnly;
             Verbose = verbose;

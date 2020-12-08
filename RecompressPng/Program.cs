@@ -108,7 +108,7 @@ namespace RecompressPng
             ap.AddHelp();
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
-            ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", -1);
+            ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('s', "strategies", OptionType.RequiredArgument,
                 "Filter strategies to try\n"
@@ -133,6 +133,7 @@ namespace RecompressPng
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
+            ap.Add("no-keep-timestamp", "Don't keep timestamp.");
             ap.Add("no-overwrite", "Don't overwrite PNG files and create images to new zip archive file or directory.");
             ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.Add("no-verify-image", "Don't compare two image data.");
@@ -183,6 +184,7 @@ namespace RecompressPng
                     ap.Get<int>('n'),
                     !ap.Get<bool>("no-overwrite"),
                     ap.Get<bool>('r'),
+                    !ap.Get<bool>("no-keep-timestamp"),
                     ap.Get<bool>('d'),
                     ap.Get<bool>('c'),
                     ap.Get<bool>('v'),
@@ -212,6 +214,7 @@ namespace RecompressPng
             Console.WriteLine($"Number of Threads: {execOptions.NumberOfThreads}");
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
+            Console.WriteLine($"Keep Timestamp: {execOptions.IsKeepTimestamp}");
             Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
@@ -263,9 +266,14 @@ namespace RecompressPng
                             {
                                 lock (dstLock)
                                 {
-                                    using (var dstZs = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal).Open())
+                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                    using (var dstZs = dstEntry.Open())
                                     {
                                         dstZs.Write(origData, 0, origData.Length);
+                                    }
+                                    if (execOptions.IsKeepTimestamp)
+                                    {
+                                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                                     }
                                 }
                             }
@@ -299,8 +307,10 @@ namespace RecompressPng
                                     {
                                         dstZs.Write(targetData, 0, targetData.Length);
                                     }
-                                    // Keep original timestamp
-                                    dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                                    if (execOptions.IsKeepTimestamp)
+                                    {
+                                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
+                                    }
                                 }
                             }
                             else if (isUseNewData)
@@ -315,8 +325,10 @@ namespace RecompressPng
                                     {
                                         srcZs.Write(compressedData, 0, compressedData.Length);
                                     }
-                                    // Keep original timestamp
-                                    srcEntry.LastWriteTime = lastWriteTime;
+                                    if (execOptions.IsKeepTimestamp)
+                                    {
+                                        srcEntry.LastWriteTime = lastWriteTime;
+                                    }
                                 }
                             }
                         }
@@ -413,8 +425,11 @@ namespace RecompressPng
                         {
                             File.Copy(srcFilePath, dstFilePath, true);
                         }
-                        // Keep original timestamp
-                        new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
+
+                        if (execOptions.IsKeepTimestamp)
+                        {
+                            new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
+                        }
                     }
 
                     Interlocked.Add(ref srcTotalFileSize, data.Length);
