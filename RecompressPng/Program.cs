@@ -104,6 +104,7 @@ namespace RecompressPng
             var indent3 = indent2 + indent1;
 
             ap.Add('c', "count-only", "Show target PNG files and its size. And show the total count and size");
+            ap.Add('d', "dry-run", "Don't save any files, just see the console output.");
             ap.AddHelp();
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
@@ -182,6 +183,7 @@ namespace RecompressPng
                     ap.Get<int>('n'),
                     !ap.Get<bool>("no-overwrite"),
                     ap.Get<bool>('r'),
+                    ap.Get<bool>('d'),
                     ap.Get<bool>('c'),
                     ap.Get<bool>('v'),
                     !ap.Get<bool>("no-verify-image")));
@@ -210,6 +212,7 @@ namespace RecompressPng
             Console.WriteLine($"Number of Threads: {execOptions.NumberOfThreads}");
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
+            Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
             Console.WriteLine("- - -");
@@ -229,7 +232,7 @@ namespace RecompressPng
                     Path.GetDirectoryName(srcZipFilePath),
                     Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
 
-            if (!execOptions.IsOverwrite && File.Exists(dstZipFilePath))
+            if (execOptions.IsCreateNewFile && File.Exists(dstZipFilePath))
             {
                 File.Delete(dstZipFilePath);
             }
@@ -239,11 +242,11 @@ namespace RecompressPng
             var totalSw = Stopwatch.StartNew();
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
 
-            using (var srcArchive = ZipFile.Open(srcZipFilePath, ZipArchiveMode.Update))
-            using (var dstArchive = execOptions.IsOverwrite ? null : ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
+            using (var srcArchive = ZipFile.Open(srcZipFilePath, (execOptions.IsOverwrite && !execOptions.IsDryRun) ? ZipArchiveMode.Update : ZipArchiveMode.Read))
+            using (var dstArchive = execOptions.IsCreateNewFile ? ZipFile.Open(dstZipFilePath, ZipArchiveMode.Create) : null)
             {
                 var srcLock = new object();
-                var dstLock = execOptions.IsOverwrite ? null : new object();
+                var dstLock = execOptions.IsCreateNewFile ? new object() : null;
                 Parallel.ForEach(
                     srcArchive.Entries,
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
@@ -256,11 +259,14 @@ namespace RecompressPng
                                 return;
                             }
                             var origData = ReadAllBytes(srcEntry, srcLock);
-                            lock (dstLock)
+                            if (!execOptions.IsDryRun)
                             {
-                                using (var dstZs = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal).Open())
+                                lock (dstLock)
                                 {
-                                    dstZs.Write(origData, 0, origData.Length);
+                                    using (var dstZs = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal).Open())
+                                    {
+                                        dstZs.Write(origData, 0, origData.Length);
+                                    }
                                 }
                             }
                             return;
@@ -280,35 +286,38 @@ namespace RecompressPng
                             pngOptions,
                             execOptions.Verbose);
 
-                        var isUseNewData = (compressedData.Length <= data.Length || execOptions.IsReplaceForce);
-                        if (!execOptions.IsOverwrite)
+                        if (!execOptions.IsDryRun)
                         {
-                            lock (dstLock)
+                            var isUseNewData = (compressedData.Length <= data.Length || execOptions.IsReplaceForce);
+                            if (!execOptions.IsOverwrite)
                             {
-                                var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                var targetData = isUseNewData ? compressedData : data;
-                                using (var dstZs = dstEntry.Open())
+                                lock (dstLock)
                                 {
-                                    dstZs.Write(targetData, 0, targetData.Length);
+                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                    var targetData = isUseNewData ? compressedData : data;
+                                    using (var dstZs = dstEntry.Open())
+                                    {
+                                        dstZs.Write(targetData, 0, targetData.Length);
+                                    }
+                                    // Keep original timestamp
+                                    dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                                 }
-                                // Keep original timestamp
-                                dstEntry.LastWriteTime = srcEntry.LastWriteTime;
                             }
-                        }
-                        else if (isUseNewData)
-                        {
-                            var lastWriteTime = srcEntry.LastWriteTime;
-                            lock (srcLock)
+                            else if (isUseNewData)
                             {
-                                var newSrcEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                srcEntry.Delete();
-                                srcEntry = newSrcEntry;
-                                using (var srcZs = srcEntry.Open())
+                                var lastWriteTime = srcEntry.LastWriteTime;
+                                lock (srcLock)
                                 {
-                                    srcZs.Write(compressedData, 0, compressedData.Length);
+                                    var newSrcEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                    srcEntry.Delete();
+                                    srcEntry = newSrcEntry;
+                                    using (var srcZs = srcEntry.Open())
+                                    {
+                                        srcZs.Write(compressedData, 0, compressedData.Length);
+                                    }
+                                    // Keep original timestamp
+                                    srcEntry.LastWriteTime = lastWriteTime;
                                 }
-                                // Keep original timestamp
-                                srcEntry.LastWriteTime = lastWriteTime;
                             }
                         }
 
@@ -328,11 +337,14 @@ namespace RecompressPng
                     });
             }
 
-            var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
-
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
+            if (!execOptions.IsDryRun)
+            {
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
+                Console.WriteLine($"{ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+            }
             if (execOptions.IsVerifyImage)
             {
                 if (nProcPngFiles == nSameImages)
@@ -384,25 +396,26 @@ namespace RecompressPng
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
                             .ToString());
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
-
                     var data = File.ReadAllBytes(srcFilePath);
                     var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                     // Take a long time
                     var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
 
-                    if (compressedData.Length <= data.Length || execOptions.IsReplaceForce)
+                    if (!execOptions.IsDryRun)
                     {
-                        File.WriteAllBytes(dstFilePath, compressedData);
+                        Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                        if (compressedData.Length <= data.Length || execOptions.IsReplaceForce)
+                        {
+                            File.WriteAllBytes(dstFilePath, compressedData);
+                        }
+                        else
+                        {
+                            File.Copy(srcFilePath, dstFilePath, true);
+                        }
+                        // Keep original timestamp
+                        new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
                     }
-                    else
-                    {
-                        File.Copy(srcFilePath, dstFilePath, true);
-                    }
-
-                    // Keep original timestamp
-                    new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
 
                     Interlocked.Add(ref srcTotalFileSize, data.Length);
                     Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
@@ -426,7 +439,8 @@ namespace RecompressPng
 
             Console.WriteLine("- - -");
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
+            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
+            Console.WriteLine($"{ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
             if (execOptions.IsVerifyImage)
             {
                 if (nProcPngFiles == nSameImages)
