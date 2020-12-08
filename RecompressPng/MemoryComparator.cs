@@ -48,14 +48,18 @@ namespace RecompressPng
         {
             IsDisposed = false;
             var mh = CreateAppropreateCompareMemoryMethodHandle();
-            if (mh == null)
-            {
-                _compareMemory = CompareMemoryNaive;
-            }
-            else
+            if (mh != null)
             {
                 _compareMemoryMethodHandle = mh;
                 _compareMemory = mh.Method;
+            }
+            else if (Environment.Is64BitProcess)
+            {
+                _compareMemory = CompareMemoryNaiveX64;
+            }
+            else
+            {
+                _compareMemory = CompareMemoryNaiveX86;
             }
         }
 
@@ -138,34 +142,99 @@ namespace RecompressPng
 
 
         /// <summary>
-        /// Compare two byte data.
+        /// Compare two byte data for x64 environment.
         /// </summary>
         /// <param name="pData1">First pointer to byte data array.</param>
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
-        public static unsafe bool CompareMemoryNaive(IntPtr pData1, IntPtr  pData2, UIntPtr dataLength)
+        public static unsafe bool CompareMemoryNaiveX64(IntPtr pData1, IntPtr  pData2, UIntPtr dataLength)
         {
-            return CompareMemoryNaive((byte*)pData1, (byte*)pData2, (ulong)dataLength);
+            return CompareMemoryNaiveX64((byte*)pData1, (byte*)pData2, (ulong)dataLength);
         }
 
 
         /// <summary>
-        /// Compare two byte data.
+        /// Compare two byte data for x64 environment.
         /// </summary>
         /// <param name="pData1">First pointer to byte data array.</param>
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
-        public static unsafe bool CompareMemoryNaive(byte* pData1, byte* pData2, ulong dataLength)
+        public static unsafe bool CompareMemoryNaiveX64(byte* pData1, byte* pData2, ulong dataLength)
         {
-            for (ulong i = 0; i < dataLength; i++)
+            const ulong stride = sizeof(ulong);
+
+            for (ulong i = 0, im = dataLength - stride; i <= im; i += stride)
+            {
+                if (*(ulong*)&pData1[i] != *(ulong*)&pData2[i])
+                {
+                    return false;
+                }
+            }
+
+            if (dataLength % stride == 0)
+            {
+                return true;
+            }
+
+            for (ulong i = dataLength - stride + 1; i < dataLength; i++)
             {
                 if (pData1[i] != pData2[i])
                 {
                     return false;
                 }
             }
+
+            return true;
+        }
+
+
+        /// <summary>
+        /// Compare two byte data for x86 environment.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemoryNaiveX86(IntPtr pData1, IntPtr  pData2, UIntPtr dataLength)
+        {
+            return CompareMemoryNaiveX64((byte*)pData1, (byte*)pData2, (uint)dataLength);
+        }
+
+
+        /// <summary>
+        /// Compare two byte data for x86 environment.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemoryNaiveX86(byte* pData1, byte* pData2, uint dataLength)
+        {
+            const uint stride = sizeof(uint);
+
+            for (uint i = 0, im = dataLength - stride; i <= im; i += stride)
+            {
+                if (*(uint*)&pData1[i] != *(uint*)&pData2[i])
+                {
+                    return false;
+                }
+            }
+
+            if (dataLength % stride == 0)
+            {
+                return true;
+            }
+
+            for (uint i = dataLength - stride + 1; i < dataLength; i++)
+            {
+                if (pData1[i] != pData2[i])
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
