@@ -319,7 +319,7 @@ namespace RecompressPng
 
                         if (!execOptions.IsDryRun)
                         {
-                            var isUseNewData = (compressedData.Length <= data.Length || execOptions.IsReplaceForce);
+                            var isUseNewData = (compressedData.LongLength <= dataLength || execOptions.IsReplaceForce);
                             if (!execOptions.IsOverwrite)
                             {
                                 lock (dstLock)
@@ -361,14 +361,14 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var isSameImage = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                            var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
                             if (isSameImage)
                             {
                                 Interlocked.Increment(ref nSameImages);
                             }
                             verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
                         }
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(dataLength, compressedData.LongLength) * 100.0:F2}%)");
                     });
             }
 
