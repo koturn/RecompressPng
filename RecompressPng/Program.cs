@@ -23,6 +23,10 @@ namespace RecompressPng
     class Program
     {
         /// <summary>
+        /// Default capacity of <see cref="MemoryStream"/> for reading <see cref="ZipArchiveEntry"/>.
+        /// </summary>
+        private const int DefaultMemoryStreamCapacity = 4 * 1024 * 1024;
+        /// <summary>
         /// Date time format for logging.
         /// </summary>
         private const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
@@ -275,7 +279,7 @@ namespace RecompressPng
                             {
                                 return;
                             }
-                            var origData = ReadAllBytes(srcEntry, srcLock);
+                            var (origData, origDataLength) = ReadAllBytes(srcEntry, srcLock, execOptions.IsOverwrite);
                             if (!execOptions.IsDryRun)
                             {
                                 lock (dstLock)
@@ -283,7 +287,7 @@ namespace RecompressPng
                                     var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
                                     using (var dstZs = dstEntry.Open())
                                     {
-                                        dstZs.Write(origData, 0, origData.Length);
+                                        dstZs.Write(origData, 0, (int)origDataLength);
                                     }
                                     if (execOptions.IsKeepTimestamp)
                                     {
@@ -299,14 +303,19 @@ namespace RecompressPng
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
 
-                        var data = ReadAllBytes(srcEntry, srcLock);
+                        var (data, dataLength) = ReadAllBytes(srcEntry, srcLock, execOptions.IsOverwrite);
 
                         // Take a long time
                         var compressedData = ZopfliPng.OptimizePng(
                             data,
-                            data.LongLength,
+                            dataLength,
                             pngOptions,
                             execOptions.Verbose);
+                        if (compressedData == null)
+                        {
+                            Console.Error.WriteLine("Invalid PNG data");
+                            return;
+                        }
 
                         if (!execOptions.IsDryRun)
                         {
@@ -561,18 +570,43 @@ namespace RecompressPng
         /// </summary>
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
         /// <param name="lockObj">The object for lock.</param>
-        /// <returns>Read data.</returns>
-        private static byte[] ReadAllBytes(ZipArchiveEntry entry, object lockObj)
+        /// <param name="isReadWrite">For the Zip archive of <paramref name="entry"/>, whether the reading could take place after the write.</param>
+        /// <returns>Read data and its length (not shrinked).</returns>
+        private static (byte[] Data, long Length) ReadAllBytes(ZipArchiveEntry entry, object lockObj, bool isReadWrite = true)
         {
-            var data = new byte[entry.Length];
-            lock (lockObj)
+            if (isReadWrite)
             {
-                using (var zs = entry.Open())
+                // After writing to ZipArchive, we cannot get the data length of ZipArchiveEntry.
+                // So we use MemoryStream to read uncompressed data.
+                // However, it requires extra memory allocation and copying costs for the following two reasons.
+                // First, since we don't know how many bytes total are needed, we need to give the MemoryStream
+                // a larger initial capacity to avoid re-allocation.
+                // Second, CopyTo() method internally allocates a small read buffer.
+                using (var ms = new MemoryStream(DefaultMemoryStreamCapacity))
                 {
-                    zs.Read(data, 0, data.Length);
+                    lock (lockObj)
+                    {
+                        using (var zs = entry.Open())
+                        {
+                            zs.CopyTo(ms);
+                        }
+                    }
+                    return (ms.GetBuffer(), ms.Length);
                 }
             }
-            return data;
+            else
+            {
+                // Efficient memory allocation way.
+                var data = new byte[entry.Length];
+                lock (lockObj)
+                {
+                    using (var zs = entry.Open())
+                    {
+                        zs.Read(data, 0, data.Length);
+                    }
+                }
+                return (data, data.LongLength);
+            }
         }
 
         /// <summary>
