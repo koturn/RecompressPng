@@ -260,7 +260,7 @@ namespace RecompressPng
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
 
             using (var srcArchive = ZipFile.Open(srcZipFilePath, (execOptions.IsOverwrite && !execOptions.IsDryRun) ? ZipArchiveMode.Update : ZipArchiveMode.Read))
-            using (var dstArchive = execOptions.IsCreateNewFile ? ZipFile.Open(dstZipFilePath, ZipArchiveMode.Create) : null)
+            using (var dstArchive = execOptions.IsCreateNewFile ? ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update) : null)
             {
                 var srcLock = new object();
                 var dstLock = execOptions.IsCreateNewFile ? new object() : null;
@@ -332,7 +332,7 @@ namespace RecompressPng
                                 var lastWriteTime = srcEntry.LastWriteTime;
                                 lock (srcLock)
                                 {
-                                    var newSrcEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
+                                    var newSrcEntry = srcArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
                                     srcEntry.Delete();
                                     srcEntry = newSrcEntry;
                                     using (var srcZs = srcEntry.Open())
