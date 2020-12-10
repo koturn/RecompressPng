@@ -253,7 +253,7 @@ namespace RecompressPng
                     Path.GetDirectoryName(srcZipFilePath),
                     Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
 
-            if (execOptions.IsCreateNewFile && File.Exists(dstZipFilePath))
+            if (File.Exists(dstZipFilePath))
             {
                 File.Delete(dstZipFilePath);
             }
@@ -263,11 +263,11 @@ namespace RecompressPng
             var totalSw = Stopwatch.StartNew();
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
 
-            using (var srcArchive = ZipFile.Open(srcZipFilePath, (execOptions.IsOverwrite && !execOptions.IsDryRun) ? ZipArchiveMode.Update : ZipArchiveMode.Read))
-            using (var dstArchive = execOptions.IsCreateNewFile ? ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update) : null)
+            using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
+            using (var dstArchive = execOptions.IsDryRun ? null : ZipFile.Open(dstZipFilePath, ZipArchiveMode.Create))
             {
                 var srcLock = new object();
-                var dstLock = execOptions.IsCreateNewFile ? new object() : null;
+                var dstLock = execOptions.IsDryRun ? null : new object();
                 Parallel.ForEach(
                     srcArchive.Entries,
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
@@ -275,25 +275,14 @@ namespace RecompressPng
                     {
                         if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (execOptions.IsOverwrite)
-                            {
-                                return;
-                            }
-                            var (origData, origDataLength) = ReadAllBytes(srcEntry, srcLock, execOptions.IsOverwrite);
                             if (!execOptions.IsDryRun)
                             {
-                                lock (dstLock)
-                                {
-                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                    using (var dstZs = dstEntry.Open())
-                                    {
-                                        dstZs.Write(origData, 0, (int)origDataLength);
-                                    }
-                                    if (execOptions.IsKeepTimestamp)
-                                    {
-                                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
-                                    }
-                                }
+                                CreateEntryAndWriteData(
+                                    dstArchive,
+                                    srcEntry.FullName,
+                                    ReadAllBytes(srcEntry, srcLock),
+                                    dstLock,
+                                    execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
                             }
                             return;
                         }
@@ -303,12 +292,11 @@ namespace RecompressPng
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
 
-                        var (data, dataLength) = ReadAllBytes(srcEntry, srcLock, execOptions.IsOverwrite);
+                        var data = ReadAllBytes(srcEntry, srcLock);
 
                         // Take a long time
                         var compressedData = ZopfliPng.OptimizePng(
                             data,
-                            dataLength,
                             pngOptions,
                             execOptions.Verbose);
                         if (compressedData == null)
@@ -319,41 +307,12 @@ namespace RecompressPng
 
                         if (!execOptions.IsDryRun)
                         {
-                            var isUseNewData = (compressedData.LongLength <= dataLength || execOptions.IsReplaceForce);
-                            if (!execOptions.IsOverwrite)
-                            {
-                                lock (dstLock)
-                                {
-                                    var dstEntry = dstArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                    var targetData = isUseNewData ? compressedData : data;
-                                    using (var dstZs = dstEntry.Open())
-                                    {
-                                        dstZs.Write(targetData, 0, targetData.Length);
-                                    }
-                                    if (execOptions.IsKeepTimestamp)
-                                    {
-                                        dstEntry.LastWriteTime = srcEntry.LastWriteTime;
-                                    }
-                                }
-                            }
-                            else if (isUseNewData)
-                            {
-                                var lastWriteTime = srcEntry.LastWriteTime;
-                                lock (srcLock)
-                                {
-                                    var newSrcEntry = srcArchive.CreateEntry(srcEntry.FullName, CompressionLevel.Optimal);
-                                    srcEntry.Delete();
-                                    srcEntry = newSrcEntry;
-                                    using (var srcZs = srcEntry.Open())
-                                    {
-                                        srcZs.Write(compressedData, 0, compressedData.Length);
-                                    }
-                                    if (execOptions.IsKeepTimestamp)
-                                    {
-                                        srcEntry.LastWriteTime = lastWriteTime;
-                                    }
-                                }
-                            }
+                            CreateEntryAndWriteData(
+                                dstArchive,
+                                srcEntry.FullName,
+                                (compressedData.LongLength < data.LongLength || execOptions.IsReplaceForce) ? compressedData : data,
+                                dstLock,
+                                execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
                         }
 
                         // The comparison of image data is considered to take a little longer.
@@ -361,15 +320,21 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var isSameImage = CompareImage(data, dataLength, compressedData, compressedData.LongLength);
+                            var isSameImage = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
                             if (isSameImage)
                             {
                                 Interlocked.Increment(ref nSameImages);
                             }
                             verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
                         }
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(dataLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(dataLength, compressedData.LongLength) * 100.0:F2}%)");
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                     });
+            }
+
+            if (execOptions.IsOverwrite)
+            {
+                File.Delete(srcZipFilePath);
+                File.Move(dstZipFilePath, srcZipFilePath);
             }
 
             Console.WriteLine("- - -");
@@ -570,42 +535,41 @@ namespace RecompressPng
         /// </summary>
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
         /// <param name="lockObj">The object for lock.</param>
-        /// <param name="isReadWrite">For the Zip archive of <paramref name="entry"/>, whether the reading could take place after the write.</param>
-        /// <returns>Read data and its length (not shrinked).</returns>
-        private static (byte[] Data, long Length) ReadAllBytes(ZipArchiveEntry entry, object lockObj, bool isReadWrite = true)
+        /// <returns>Read data.</returns>
+        private static byte[] ReadAllBytes(ZipArchiveEntry entry, object lockObj)
         {
-            if (isReadWrite)
+            var data = new byte[entry.Length];
+            lock (lockObj)
             {
-                // After writing to ZipArchive, we cannot get the data length of ZipArchiveEntry.
-                // So we use MemoryStream to read uncompressed data.
-                // However, it requires extra memory allocation and copying costs for the following two reasons.
-                // First, since we don't know how many bytes total are needed, we need to give the MemoryStream
-                // a larger initial capacity to avoid re-allocation.
-                // Second, CopyTo() method internally allocates a small read buffer.
-                using (var ms = new MemoryStream(DefaultMemoryStreamCapacity))
+                using (var zs = entry.Open())
                 {
-                    lock (lockObj)
-                    {
-                        using (var zs = entry.Open())
-                        {
-                            zs.CopyTo(ms);
-                        }
-                    }
-                    return (ms.GetBuffer(), ms.Length);
+                    zs.Read(data, 0, data.Length);
                 }
             }
-            else
+            return data;
+        }
+
+        /// <summary>
+        /// Create new entry in <see cref="ZipArchive"/> and write data to it.
+        /// </summary>
+        /// <param name="archive">Target zip archive.</param>
+        /// <param name="entryName">New entry name.</param>
+        /// <param name="data">The data to write.</param>
+        /// <param name="lockObj">The object for lock.</param>
+        /// <param name="timestamp">Timestamp for new entry.</param>
+        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, byte[] data, object lockObj, DateTimeOffset? timestamp = null)
+        {
+            lock (lockObj)
             {
-                // Efficient memory allocation way.
-                var data = new byte[entry.Length];
-                lock (lockObj)
+                var dstEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+                if (timestamp.HasValue)
                 {
-                    using (var zs = entry.Open())
-                    {
-                        zs.Read(data, 0, data.Length);
-                    }
+                    dstEntry.LastWriteTime = timestamp.Value;
                 }
-                return (data, data.LongLength);
+                using (var dstZs = dstEntry.Open())
+                {
+                    dstZs.Write(data, 0, data.Length);
+                }
             }
         }
 
