@@ -107,7 +107,7 @@ namespace RecompressPng
         /// <returns>True if two byte data is same, otherwise false.</returns>
         public bool CompareMemory(byte[] data1, byte[] data2)
         {
-            return data1.LongLength == data2.LongLength ? CompareMemory(data1, data2, data1.LongLength) : false;
+            return data1.LongLength == data2.LongLength && CompareMemory(data1, data2, data1.LongLength);
         }
 
 
@@ -164,8 +164,9 @@ namespace RecompressPng
         public static unsafe bool CompareMemoryNaiveX64(byte* pData1, byte* pData2, ulong dataLength)
         {
             const ulong stride = sizeof(ulong);
+            var n = dataLength / stride * stride;
 
-            for (ulong i = 0, im = dataLength - stride; i <= im; i += stride)
+            for (ulong i = 0; i < n; i += stride)
             {
                 if (*(ulong*)&pData1[i] != *(ulong*)&pData2[i])
                 {
@@ -173,12 +174,7 @@ namespace RecompressPng
                 }
             }
 
-            if (dataLength % stride == 0)
-            {
-                return true;
-            }
-
-            for (ulong i = dataLength - stride + 1; i < dataLength; i++)
+            for (ulong i = n; i < dataLength; i++)
             {
                 if (pData1[i] != pData2[i])
                 {
@@ -213,8 +209,9 @@ namespace RecompressPng
         public static unsafe bool CompareMemoryNaiveX86(byte* pData1, byte* pData2, uint dataLength)
         {
             const uint stride = sizeof(uint);
+            var n = dataLength / stride * stride;
 
-            for (uint i = 0, im = dataLength - stride; i <= im; i += stride)
+            for (uint i = 0; i < n; i += stride)
             {
                 if (*(uint*)&pData1[i] != *(uint*)&pData2[i])
                 {
@@ -222,12 +219,7 @@ namespace RecompressPng
                 }
             }
 
-            if (dataLength % stride == 0)
-            {
-                return true;
-            }
-
-            for (uint i = dataLength - stride + 1; i < dataLength; i++)
+            for (uint i = n; i < dataLength; i++)
             {
                 if (pData1[i] != pData2[i])
                 {
