@@ -41,9 +41,43 @@ namespace RecompressPng
                 [In] UIntPtr origpngSize,
                 in CZopfliPNGOptions pngOptions,
                 [In] bool verbose,
-                out IntPtr resultPng,
+                out MallocedMemoryHandle resultPng,
                 out UIntPtr resultpngSize);
         }
+
+        /// <summary>
+        /// <para><see cref="SafeHandle"/> for malloced memory.</para>
+        /// <para>Free memory using <see cref="Marshal.FreeCoTaskMem(IntPtr)"/>.</para>
+        /// </summary>
+        internal sealed class MallocedMemoryHandle : SafeHandle
+        {
+            /// <summary>
+            /// Private ctor
+            /// </summary>
+            private MallocedMemoryHandle()
+                : base(IntPtr.Zero, true)
+            {
+            }
+
+            /// <summary>
+            /// True if the memory is not allocated (null pointer), otherwise false.
+            /// </summary>
+            public override bool IsInvalid
+            {
+                get { return handle == IntPtr.Zero; }
+            }
+
+            /// <summary>
+            /// Free malloced memory using <see cref="Marshal.FreeCoTaskMem(IntPtr)"/>.
+            /// </summary>
+            /// <returns>True if freeing is successful, otherwise false</returns>
+            protected override bool ReleaseHandle()
+            {
+                Marshal.FreeCoTaskMem(handle);
+                return true;
+            }
+        }
+
 
         /// <summary>
         /// Re-compress deflated data in PNG with zopfli algorithm.
@@ -85,21 +119,24 @@ namespace RecompressPng
                     (UIntPtr)pngDataLength,
                     in cPngOptions,
                     verbose,
-                    out var pResultPng,
+                    out var pResultPngHandle,
                     out var resultPngSize);
 
-                if (error != 0)
+                if (pResultPngHandle.IsInvalid)
                 {
                     return null;
                 }
 
-                var resultPng = new byte[(ulong)resultPngSize];
-                Marshal.Copy(pResultPng, resultPng, 0, resultPng.Length);
-
-                // Free malloc() memory from C library
-                Marshal.FreeCoTaskMem(pResultPng);
-
-                return resultPng;
+                using (pResultPngHandle)
+                {
+                    if (error != 0)
+                    {
+                        return null;
+                    }
+                    var resultPng = new byte[(ulong)resultPngSize];
+                    Marshal.Copy(pResultPngHandle.DangerousGetHandle(), resultPng, 0, resultPng.Length);
+                    return resultPng;
+                }
             }
         }
     }

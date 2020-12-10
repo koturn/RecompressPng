@@ -12,7 +12,7 @@ namespace RecompressPng
     /// <para>This structure is used to interact with zopflipng.dll.</para>
     /// </summary>
     /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGSetDefaults(out CZopfliPNGOptions)"/>
-    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGOptimize(byte[], UIntPtr, in CZopfliPNGOptions, bool, out IntPtr, out UIntPtr)"/>
+    /// <seealso cref="ZopfliPng.UnsafeNativeMethods.CZopfliPNGOptimize(byte[], UIntPtr, in CZopfliPNGOptions, bool, out ZopfliPng.MallocedMemoryHandle, out UIntPtr)"/>
     public struct CZopfliPNGOptions : IDisposable
     {
         /// <summary>
