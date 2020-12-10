@@ -338,6 +338,11 @@ namespace RecompressPng
             }
 
             Console.WriteLine("- - -");
+            if (nProcPngFiles == 0)
+            {
+                Console.WriteLine("No PNG file were processed.");
+                return;
+            }
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
             if (!execOptions.IsDryRun)
@@ -441,6 +446,11 @@ namespace RecompressPng
                 });
 
             Console.WriteLine("- - -");
+            if (nProcPngFiles == 0)
+            {
+                Console.WriteLine("No PNG file were processed.");
+                return;
+            }
             Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
             Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
             Console.WriteLine($"{ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
