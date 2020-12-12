@@ -83,9 +83,9 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ArgumentParserNetStd\ArgumentParserNetStd.csproj">
-      <Project>{5a9465f9-4ead-4d52-84c3-5d673fda739f}</Project>
-      <Name>ArgumentParserNetStd</Name>
+    <ProjectReference Include="..\ArgumentParserSharp\ArgumentParserSharp\ArgumentParserSharp.csproj">
+      <Project>{9cd7f8c5-e069-4480-a23f-e932b54ab25d}</Project>
+      <Name>ArgumentParserSharp</Name>
     </ProjectReference>
     <ProjectReference Include="..\NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj">
       <Project>{21557920-be91-42a5-866c-04570dff5ab8}</Project>

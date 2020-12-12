@@ -5,11 +5,11 @@ VisualStudioVersion = 16.0.29911.84
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RecompressPng", "RecompressPng\RecompressPng.csproj", "{917136C2-6EAC-4799-9E00-87F8916C62A7}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArgumentParserNetStd", "ArgumentParserNetStd\ArgumentParserNetStd.csproj", "{5A9465F9-4EAD-4D52-84C3-5D673FDA739F}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NativeCodeSharp", "NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj", "{21557920-BE91-42A5-866C-04570DFF5AB8}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ZopfliSharp", "ZopfliSharp\ZopfliSharp\ZopfliSharp.csproj", "{54CE1409-89E0-4B9D-89E8-1C5FEDECA2D2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArgumentParserSharp", "ArgumentParserSharp\ArgumentParserSharp\ArgumentParserSharp.csproj", "{9CD7F8C5-E069-4480-A23F-E932B54AB25D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,10 +21,6 @@ Global
 		{917136C2-6EAC-4799-9E00-87F8916C62A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{917136C2-6EAC-4799-9E00-87F8916C62A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{917136C2-6EAC-4799-9E00-87F8916C62A7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{5A9465F9-4EAD-4D52-84C3-5D673FDA739F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5A9465F9-4EAD-4D52-84C3-5D673FDA739F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5A9465F9-4EAD-4D52-84C3-5D673FDA739F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5A9465F9-4EAD-4D52-84C3-5D673FDA739F}.Release|Any CPU.Build.0 = Release|Any CPU
 		{21557920-BE91-42A5-866C-04570DFF5AB8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{21557920-BE91-42A5-866C-04570DFF5AB8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{21557920-BE91-42A5-866C-04570DFF5AB8}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -33,6 +29,10 @@ Global
 		{54CE1409-89E0-4B9D-89E8-1C5FEDECA2D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{54CE1409-89E0-4B9D-89E8-1C5FEDECA2D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{54CE1409-89E0-4B9D-89E8-1C5FEDECA2D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9CD7F8C5-E069-4480-A23F-E932B54AB25D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CD7F8C5-E069-4480-A23F-E932B54AB25D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CD7F8C5-E069-4480-A23F-E932B54AB25D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CD7F8C5-E069-4480-A23F-E932B54AB25D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
