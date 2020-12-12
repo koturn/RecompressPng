@@ -74,13 +74,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CZopfliPNGOptions.cs" />
     <Compile Include="ExecuteOptions.cs" />
     <Compile Include="MemoryComparator.cs" />
-    <Compile Include="ZopfliPng.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ZopfliPNGOptions.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -93,6 +90,10 @@
     <ProjectReference Include="..\NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj">
       <Project>{21557920-be91-42a5-866c-04570dff5ab8}</Project>
       <Name>NativeCodeSharp</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ZopfliSharp\ZopfliSharp\ZopfliSharp.csproj">
+      <Project>{54ce1409-89e0-4b9d-89e8-1c5fedeca2d2}</Project>
+      <Name>ZopfliSharp</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -1,3 +1,6 @@
 [submodule "NativeCodeSharp"]
 	path = NativeCodeSharp
 	url = https://github.com/koturn/NativeCodeSharp
+[submodule "ZopfliSharp"]
+	path = ZopfliSharp
+	url = https://github.com/koturn/ZopfliSharp
