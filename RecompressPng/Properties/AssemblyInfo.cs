@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // 制御されます。アセンブリに関連付けられている情報を変更するには、
 // これらの属性値を変更します。
 [assembly: AssemblyTitle("RecompressPng")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("PNG re-compressing tool with Zopfli Compression Algorithm.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("koturn")]
 [assembly: AssemblyProduct("RecompressPng")]
-[assembly: AssemblyCopyright("Copyright ©  2020")]
+[assembly: AssemblyCopyright("Copyright (C) 2020 koturn All Rights Reserverd.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
