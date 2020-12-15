@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using ArgumentParserSharp;
+using ArgumentParserSharp.Exceptions;
 using ZopfliSharp;
 
 
@@ -56,11 +57,11 @@ namespace RecompressPng
         /// <returns>Status code.</returns>
         private static int Main(string[] args)
         {
-            var (target, pngOptions, execOptions) = ParseCommadLineArguments(args);
-            ShowParameters(pngOptions, execOptions);
-
             try
             {
+                var (target, pngOptions, execOptions) = ParseCommadLineArguments(args);
+                ShowParameters(pngOptions, execOptions);
+
                 _memoryComparator = new MemoryComparator();
                 if (File.Exists(target))
                 {
@@ -97,6 +98,24 @@ namespace RecompressPng
                     Console.Error.WriteLine("Specified file doesn't exist");
                     return 1;
                 }
+            }
+            catch (ArgumentParserException ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+            }
+            catch (AggregateException exs)
+            {
+                foreach (var ex in exs.Flatten().InnerExceptions)
+                {
+                    Console.Error.WriteLine($"= = = {ex.GetType().Name} = = =");
+                    Console.Error.WriteLine($"Message = {ex.Message} = = =");
+                    Console.Error.WriteLine($"StackTrace = {ex.StackTrace} = = =");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                Console.Error.WriteLine(ex.StackTrace);
             }
             finally
             {
