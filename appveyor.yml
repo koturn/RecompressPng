@@ -1,0 +1,34 @@
+version: 1.0.{build}
+image: Visual Studio 2019
+install:
+- cmd: '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
+build_script:
+- cmd: >-
+    git submodule update --init
+
+    msbuild /nologo /m /t:restore /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
+
+    msbuild /nologo /m /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
+
+    git clone https://github.com/google/zopfli
+
+    mkdir zopfli\build
+
+    cd zopfli\build
+
+    cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DZOPFLI_BUILD_SHARED=ON
+
+    cmake --build .
+
+    copy zopfli.dll ..\..\RecompressPng\bin\Release\
+
+    copy zopflipng.dll ..\..\RecompressPng\bin\Release\
+
+    cd ..\..
+
+    7z a -mx=9 -r RecompressPng.zip RecompressPng\bin\Release\
+test_script:
+- cmd: '"RecompressPng\bin\Release\RecompressPng.exe" -h'
+artifacts:
+- path: RecompressPng.zip
+  name: PNG re-compressing tool with Zopfli Compression Algorithm

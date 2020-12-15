@@ -1,6 +1,8 @@
 RecompressPng
 =============
 
+[![Test status](https://ci.appveyor.com/api/projects/status/pic7w57ggpfcs7qx?svg=true)](https://ci.appveyor.com/project/koturn/recompresspng "AppVeyor | koturn/RecompressPng")
+
 PNG re-compressing tool with [Zopfli Compression Algorithm](https://github.com/google/zopfli "google/zopfli").
 
 - Parallel executable
@@ -26,6 +28,7 @@ First, pull all submodules.
 Second, build whole project.
 
 ```shell
+> msbuild /nologo /m /t:restore /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
 > msbuild /nologo /m /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
 ```
 
