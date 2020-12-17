@@ -184,7 +184,7 @@ namespace RecompressPng
 
             ap.Parse(args);
 
-            if (ap.Get<bool>('h'))
+            if (ap.GetValue<bool>('h'))
             {
                 ap.ShowUsage();
                 Environment.Exit(0);
@@ -203,36 +203,36 @@ namespace RecompressPng
             }
 
             var zo = ZopfliPNGOptions.GetDefault();
-            zo.NumIterations = ap.Get<int>('i');
-            zo.NumIterationsLarge = ap.Get<int>('I');
-            zo.LossyTransparent = ap.Get<bool>("lossy-transparent");
-            zo.Lossy8bit = ap.Get<bool>("lossy-8bit");
-            zo.AutoFilterStrategy = !ap.Get<bool>("no-auto-filter-strategy");
-            zo.UseZopfli = !ap.Get<bool>("no-use-zopfli");
+            zo.NumIterations = ap.GetValue<int>('i');
+            zo.NumIterationsLarge = ap.GetValue<int>('I');
+            zo.LossyTransparent = ap.GetValue<bool>("lossy-transparent");
+            zo.Lossy8bit = ap.GetValue<bool>("lossy-8bit");
+            zo.AutoFilterStrategy = !ap.GetValue<bool>("no-auto-filter-strategy");
+            zo.UseZopfli = !ap.GetValue<bool>("no-use-zopfli");
 
-            if (ap.Exists('s'))
+            if (ap.HasValue('s'))
             {
-                zo.FilterStrategies.AddRange(ap.Get('s')
+                zo.FilterStrategies.AddRange(ap.GetValue('s')
                     .Split(',')
                     .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token)));
             }
-            if (ap.Exists("keep-chunks"))
+            if (ap.HasValue("keep-chunks"))
             {
-                zo.KeepChunks.AddRange(ap.Get("keep-chunks").Split(','));
+                zo.KeepChunks.AddRange(ap.GetValue("keep-chunks").Split(','));
             }
 
             return (
                 targets[0],
                 zo,
                 new ExecuteOptions(
-                    ap.Get<int>('n'),
-                    !ap.Get<bool>("no-overwrite"),
-                    ap.Get<bool>('r'),
-                    !ap.Get<bool>("no-keep-timestamp"),
-                    ap.Get<bool>('d'),
-                    ap.Get<bool>('c'),
-                    ap.Get<bool>('v'),
-                    !ap.Get<bool>("no-verify-image")));
+                    ap.GetValue<int>('n'),
+                    !ap.GetValue<bool>("no-overwrite"),
+                    ap.GetValue<bool>('r'),
+                    !ap.GetValue<bool>("no-keep-timestamp"),
+                    ap.GetValue<bool>('d'),
+                    ap.GetValue<bool>('c'),
+                    ap.GetValue<bool>('v'),
+                    !ap.GetValue<bool>("no-verify-image")));
         }
 
         /// <summary>
