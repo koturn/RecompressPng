@@ -98,31 +98,37 @@ namespace RecompressPng
                     Console.Error.WriteLine("Specified file doesn't exist");
                     return 1;
                 }
+
+                return 0;
             }
             catch (ArgumentParserException ex)
             {
                 Console.Error.WriteLine(ex.Message);
+
+                return 2;
             }
             catch (AggregateException exs)
             {
                 foreach (var ex in exs.Flatten().InnerExceptions)
                 {
                     Console.Error.WriteLine($"= = = {ex.GetType().Name} = = =");
-                    Console.Error.WriteLine($"Message = {ex.Message} = = =");
-                    Console.Error.WriteLine($"StackTrace = {ex.StackTrace} = = =");
+                    Console.Error.WriteLine($"Message = {ex.Message}");
+                    Console.Error.WriteLine($"StackTrace = {ex.StackTrace}");
                 }
+
+                return 3;
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine(ex.Message);
                 Console.Error.WriteLine(ex.StackTrace);
+
+                return 1;
             }
             finally
             {
                 _memoryComparator?.Dispose();
             }
-
-            return 0;
         }
 
         /// <summary>
