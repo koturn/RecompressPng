@@ -242,8 +242,8 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         private static void ShowParameters(ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
-            var strategies = pngOptions.FilterStrategies == null ? "" : string.Join(", ", pngOptions.FilterStrategies);
-            var keepChunks = pngOptions.KeepChunks == null ? "" : string.Join(", ", pngOptions.KeepChunks);
+            var strategies = pngOptions.FilterStrategies is null ? "" : string.Join(", ", pngOptions.FilterStrategies);
+            var keepChunks = pngOptions.KeepChunks is null ? "" : string.Join(", ", pngOptions.KeepChunks);
 
             Console.WriteLine("- - - ZopfliPNG Parameters - - -");
             Console.WriteLine($"Lossy Transparent: {pngOptions.LossyTransparent}");
@@ -325,7 +325,7 @@ namespace RecompressPng
                             data,
                             pngOptions,
                             execOptions.Verbose);
-                        if (compressedData == null)
+                        if (compressedData is null)
                         {
                             Console.Error.WriteLine("Invalid PNG data");
                             return;
