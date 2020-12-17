@@ -713,10 +713,7 @@ namespace RecompressPng
         /// <returns><see cref="Bitmap"/> instance.</returns>
         private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData)
         {
-            using (var ms = new MemoryStream(imgData))
-            {
-                return (Bitmap)Image.FromStream(ms);
-            }
+            return CreateBitmapFromByteArray(imgData, imgData.LongLength);
         }
 
         /// <summary>
@@ -727,12 +724,9 @@ namespace RecompressPng
         /// <returns><see cref="Bitmap"/> instance.</returns>
         private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
         {
-            fixed (byte* pImgData = imgData)
+            using (var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false))
             {
-                using (var ums = new UnmanagedMemoryStream(pImgData, imgDataLength))
-                {
-                    return (Bitmap)Image.FromStream(ums);
-                }
+                return (Bitmap)Image.FromStream(ms);
             }
         }
 
