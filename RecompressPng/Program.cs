@@ -299,61 +299,71 @@ namespace RecompressPng
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
+                        var sw = Stopwatch.StartNew();
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+
                         if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         {
+                            if (!execOptions.IsDryRun)
+                            {
+                                Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} ...");
+                                try
+                                {
+                                    CreateEntryAndWriteData(
+                                        dstArchive,
+                                        srcEntry.FullName,
+                                        ReadAllBytes(srcEntry, srcLock),
+                                        dstLock,
+                                        execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
+                                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} failed: {ex.GetType().Name}; {ex.Message}");
+                                }
+                            }
+                            return;
+                        }
+
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
+                        try
+                        {
+                            var data = ReadAllBytes(srcEntry, srcLock);
+
+                            // Take a long time
+                            var compressedData = ZopfliPng.OptimizePng(
+                                data,
+                                pngOptions,
+                                execOptions.Verbose);
+
                             if (!execOptions.IsDryRun)
                             {
                                 CreateEntryAndWriteData(
                                     dstArchive,
                                     srcEntry.FullName,
-                                    ReadAllBytes(srcEntry, srcLock),
+                                    (compressedData.LongLength < data.LongLength || execOptions.IsReplaceForce) ? compressedData : data,
                                     dstLock,
                                     execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
                             }
-                            return;
-                        }
 
-                        var sw = Stopwatch.StartNew();
-
-                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
-
-                        var data = ReadAllBytes(srcEntry, srcLock);
-
-                        // Take a long time
-                        var compressedData = ZopfliPng.OptimizePng(
-                            data,
-                            pngOptions,
-                            execOptions.Verbose);
-                        if (compressedData is null)
-                        {
-                            Console.Error.WriteLine("Invalid PNG data");
-                            return;
-                        }
-
-                        if (!execOptions.IsDryRun)
-                        {
-                            CreateEntryAndWriteData(
-                                dstArchive,
-                                srcEntry.FullName,
-                                (compressedData.LongLength < data.LongLength || execOptions.IsReplaceForce) ? compressedData : data,
-                                dstLock,
-                                execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
-                        }
-
-                        // The comparison of image data is considered to take a little longer.
-                        // Therefore, atomically incremented nSameImages outside of the lock statement.
-                        var verifyResultMsg = "";
-                        if (execOptions.IsVerifyImage)
-                        {
-                            var isSameImage = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
-                            if (isSameImage)
+                            // The comparison of image data is considered to take a little longer.
+                            // Therefore, atomically incremented nSameImages outside of the lock statement.
+                            var verifyResultMsg = "";
+                            if (execOptions.IsVerifyImage)
                             {
-                                Interlocked.Increment(ref nSameImages);
+                                var isSameImage = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                                if (isSameImage)
+                                {
+                                    Interlocked.Increment(ref nSameImages);
+                                }
+                                verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
                             }
-                            verifyResultMsg = isSameImage ? " (same image)" : " (different image)";
+                            Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                         }
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} failed: {ex.GetType().Name}; {ex.Message}");
+                        }
                     });
             }
 
@@ -416,59 +426,64 @@ namespace RecompressPng
                 srcFilePath =>
                 {
                     var sw = Stopwatch.StartNew();
-
                     var procIndex = Interlocked.Increment(ref nProcPngFiles);
                     var srcRelPath = ToRelativePath(srcFilePath, srcBaseDirFullPath);
-                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} ...");
-
                     var dstFilePath = execOptions.IsOverwrite ? srcFilePath : Path.Combine(
                         dstBaseDirFullPath,
                         new StringBuilder(Path.GetFullPath(srcFilePath))
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
                             .ToString());
 
-                    var data = File.ReadAllBytes(srcFilePath);
-                    var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
-
-                    // Take a long time
-                    var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
-
-                    if (!execOptions.IsDryRun)
+                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} ...");
+                    try
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
-                        if (compressedData.Length <= data.Length || execOptions.IsReplaceForce)
+                        var data = File.ReadAllBytes(srcFilePath);
+                        var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
+
+                        // Take a long time
+                        var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
+
+                        if (!execOptions.IsDryRun)
                         {
-                            File.WriteAllBytes(dstFilePath, compressedData);
-                        }
-                        else
-                        {
-                            File.Copy(srcFilePath, dstFilePath, true);
+                            Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                            if (compressedData.Length <= data.Length || execOptions.IsReplaceForce)
+                            {
+                                File.WriteAllBytes(dstFilePath, compressedData);
+                            }
+                            else
+                            {
+                                File.Copy(srcFilePath, dstFilePath, true);
+                            }
+
+                            if (execOptions.IsKeepTimestamp)
+                            {
+                                new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
+                            }
                         }
 
-                        if (execOptions.IsKeepTimestamp)
+                        Interlocked.Add(ref srcTotalFileSize, data.Length);
+                        Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
+
+                        var verifyResultMsg = "";
+                        if (execOptions.IsVerifyImage)
                         {
-                            new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
+                            var isSameImage = CompareImage(data, compressedData);
+                            if (isSameImage)
+                            {
+                                Interlocked.Increment(ref nSameImages);
+                                verifyResultMsg = " (same image)";
+                            }
+                            else
+                            {
+                                verifyResultMsg = " (different image)";
+                            }
                         }
+                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                     }
-
-                    Interlocked.Add(ref srcTotalFileSize, data.Length);
-                    Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
-
-                    var verifyResultMsg = "";
-                    if (execOptions.IsVerifyImage)
+                    catch (Exception ex)
                     {
-                        var isSameImage = CompareImage(data, compressedData);
-                        if (isSameImage)
-                        {
-                            Interlocked.Increment(ref nSameImages);
-                            verifyResultMsg = " (same image)";
-                        }
-                        else
-                        {
-                            verifyResultMsg = " (different image)";
-                        }
+                        Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} failed: {ex.GetType().Name}; {ex.Message}");
                     }
-                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
                 });
 
             Console.WriteLine("- - -");
