@@ -9,4 +9,4 @@
 	url = https://github.com/koturn/ArgumentParserSharp
 [submodule "zopfli"]
 	path = zopfli
-	url = https://github.com/google/zopfli
+	url = https://github.com/koturn/zopfli
