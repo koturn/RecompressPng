@@ -10,23 +10,25 @@ build_script:
 
     msbuild /nologo /m /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
 
-    git clone https://github.com/google/zopfli
+    msbuild /nologo /m /p:Configuration=Release;Platform="x86" RecompressPng.sln
 
-    mkdir zopfli\build
+    mkdir Artifacts\RecompressPng\x64
 
-    cd zopfli\build
+    mkdir Artifacts\RecompressPng\x86
 
-    cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DZOPFLI_BUILD_SHARED=ON
+    copy RecompressPng\bin\Release\*.dll Artifacts\RecompressPng\
 
-    cmake --build .
+    copy RecompressPng\bin\Release\RecompressPng.exe Artifacts\RecompressPng\
 
-    copy zopfli.dll ..\..\RecompressPng\bin\Release\
+    copy RecompressPng\bin\Release\x64\*.dll Artifacts\RecompressPng\x64\
 
-    copy zopflipng.dll ..\..\RecompressPng\bin\Release\
+    copy RecompressPng\bin\Release\x86\*.dll Artifacts\RecompressPng\x86\
 
-    cd ..\..
+    cd Artifacts
 
-    7z a -mx=9 -r RecompressPng.zip RecompressPng\bin\Release\
+    7z a -mx=9 -r ..\RecompressPng.zip RecompressPng
+
+    cd ..
 test_script:
 - cmd: '"RecompressPng\bin\Release\RecompressPng.exe" -h'
 artifacts:
