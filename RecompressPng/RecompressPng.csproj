@@ -1,85 +1,48 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{917136C2-6EAC-4799-9E00-87F8916C62A7}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>RecompressPng</RootNamespace>
-    <AssemblyName>RecompressPng</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <Deterministic>true</Deterministic>
+    <TargetFramework>net5.0</TargetFramework>
+    <Authors>koturn</Authors>
+    <Company>koturn</Company>
+    <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
+    <Copyright>Copyright (C) 2020 koturn All Rights Reserverd.</Copyright>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/koturn/RecompressPng</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.IO.Compression.FileSystem" />
-    <Reference Include="System.Web" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
+    <PackageReference Include="NLog" Version="4.7.8" />
+    <PackageReference Include="System.Drawing.Common" Version="5.0.0" />
   </ItemGroup>
+
   <ItemGroup>
-    <Compile Include="ExecuteOptions.cs" />
-    <Compile Include="MemoryComparator.cs" />
-    <Compile Include="Program.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <ProjectReference Include="..\ArgumentParserSharp\ArgumentParserSharp\ArgumentParserSharp.csproj" />
+    <ProjectReference Include="..\NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj" />
+    <ProjectReference Include="..\ZopfliSharp\ZopfliSharp\ZopfliSharp.csproj" />
   </ItemGroup>
+
   <ItemGroup>
-    <None Include="App.config" />
-    <None Include="NLog.config">
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="NLog.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ArgumentParserSharp\ArgumentParserSharp\ArgumentParserSharp.csproj">
-      <Project>{9cd7f8c5-e069-4480-a23f-e932b54ab25d}</Project>
-      <Name>ArgumentParserSharp</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\NativeCodeSharp\NativeCodeSharp\NativeCodeSharp.csproj">
-      <Project>{21557920-be91-42a5-866c-04570dff5ab8}</Project>
-      <Name>NativeCodeSharp</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\ZopfliSharp\ZopfliSharp\ZopfliSharp.csproj">
-      <Project>{54ce1409-89e0-4b9d-89e8-1c5fedeca2d2}</Project>
-      <Name>ZopfliSharp</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="NLog">
-      <Version>4.7.8</Version>
-    </PackageReference>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
 </Project>

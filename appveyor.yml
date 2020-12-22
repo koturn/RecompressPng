@@ -16,15 +16,19 @@ build_script:
 
     mkdir Artifacts\RecompressPng\x86
 
-    copy RecompressPng\bin\Release\NLog.config Artifacts\RecompressPng\
+    copy RecompressPng\bin\Release\net5.0\NLog.config Artifacts\RecompressPng\
 
-    copy RecompressPng\bin\Release\*.dll Artifacts\RecompressPng\
+    copy RecompressPng\bin\Release\net5.0\*.dll Artifacts\RecompressPng\
 
-    copy RecompressPng\bin\Release\RecompressPng.exe Artifacts\RecompressPng\
+    copy RecompressPng\bin\Release\net5.0\*.json Artifacts\RecompressPng\
 
-    copy RecompressPng\bin\Release\x64\*.dll Artifacts\RecompressPng\x64\
+    xcopy /E RecompressPng\bin\Release\net5.0\runtimes Artifacts\RecompressPng\runtimes\
 
-    copy RecompressPng\bin\Release\x86\*.dll Artifacts\RecompressPng\x86\
+    copy RecompressPng\bin\Release\net5.0\RecompressPng.exe Artifacts\RecompressPng\
+
+    copy RecompressPng\bin\Release\net5.0\x64\*.dll Artifacts\RecompressPng\x64\
+
+    copy RecompressPng\bin\Release\net5.0\x86\*.dll Artifacts\RecompressPng\x86\
 
     cd Artifacts
 
@@ -32,7 +36,7 @@ build_script:
 
     cd ..
 test_script:
-- cmd: '"RecompressPng\bin\Release\RecompressPng.exe" -h'
+- cmd: '"Artifacts\RecompressPng\RecompressPng.exe" -h'
 artifacts:
 - path: RecompressPng.zip
   name: PNG re-compressing tool with Zopfli Compression Algorithm

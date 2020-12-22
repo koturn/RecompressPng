@@ -105,22 +105,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <TargetName>zopfli</TargetName>
-    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\x86\</OutDir>
+    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\net5.0\x86\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>zopfli</TargetName>
-    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\x86\</OutDir>
+    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\net5.0\x86\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetName>zopfli</TargetName>
-    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\net5.0\$(Platform)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>zopfli</TargetName>
-    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\$(Platform)\</OutDir>
+    <OutDir>$(SolutionDir)RecompressPng\bin\$(Configuration)\net5.0\$(Platform)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
