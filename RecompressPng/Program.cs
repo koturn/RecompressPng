@@ -25,10 +25,6 @@ namespace RecompressPng
     class Program
     {
         /// <summary>
-        /// Default capacity of <see cref="MemoryStream"/> for reading <see cref="ZipArchiveEntry"/>.
-        /// </summary>
-        private const int DefaultMemoryStreamCapacity = 4 * 1024 * 1024;
-        /// <summary>
         /// Date time format for logging.
         /// </summary>
         private const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
