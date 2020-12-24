@@ -32,23 +32,22 @@ Second, build whole project.
 > msbuild /nologo /m /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
 ```
 
-Third, place zopfli.dll and zopflipng.dll in an appropriate location.
-
-zopfli.dll and zopflipng.dll can be built by following the steps below.
+If you use x86 environment, please run the following command instead.
 
 ```shell
-> git clone https://github.com/google/zopfli
-> cd zopfli
-> mkdir build
-> cd build
-> cmake .. -G "NMake Makefile" -DCMAKE_BUILD_TYPE=Release -DZOPFLI_BUILD_SHARED=ON
-> cmake --build .
+> msbuild /nologo /m /t:restore /p:Configuration=Release;Platform="x86" RecompressPng.sln
+> msbuild /nologo /m /p:Configuration=Release;Platform="x86" RecompressPng.sln
 ```
 
 
 ## Depedent Libraries
 
-- [zopfli](https://github.com/google/zopfli "google/zopfli")
+The following libraries are managed as submodules.
+
+- [google/zopfli](https://github.com/google/zopfli "google/zopfli")
+- [koturn/ArgumentParserSharp](https://github.com/koturn/ArgumentParserSharp "koturn/ArgumentParserSharp")
+- [koturn/NativeCodeSharp](https://github.com/koturn/NativeCodeSharp "koturn/NativeCodeSharp")
+- [koturn/ZopfliSharp](https://github.com/koturn/NativeCodeSharp "koturn/ZopfliSharp")
 
 
 ## LICENSE
