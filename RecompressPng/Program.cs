@@ -5,7 +5,6 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
@@ -36,7 +35,7 @@ namespace RecompressPng
         {
             UnsafeNativeMethods.SetDllDirectory(
                 Path.Combine(
-                    Path.GetDirectoryName(Assembly.GetEntryAssembly().Location),
+                    AppContext.BaseDirectory,
                     Environment.Is64BitProcess ? "x64" : "x86"));
         }
 
