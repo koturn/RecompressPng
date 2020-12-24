@@ -27,7 +27,7 @@ namespace RecompressPng
         /// <summary>
         /// Date time format for logging.
         /// </summary>
-        private const string LogDateTimeFormat = "yyyy-MM-dd hh:mm:ss.fff";
+        private const string LogDateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff";
 
         /// <summary>
         /// Setup DLL search path.
