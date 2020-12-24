@@ -1,6 +1,6 @@
 version: 1.0.{build}
 image: Visual Studio 2019
-install:
+init:
 - cmd: '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
 build_script:
 - cmd: >-
@@ -12,23 +12,13 @@ build_script:
 
     msbuild /nologo /m /p:Configuration=Release;Platform="x86" RecompressPng.sln
 
-    mkdir Artifacts\RecompressPng\x64
+    dotnet publish --nologo -c Release -o Artifacts\RecompressPng || set ERRORLEVEL=0
 
-    mkdir Artifacts\RecompressPng\x86
+    xcopy /Y RecompressPng\bin\Release\net5.0\x64\*.dll Artifacts\RecompressPng\x64\
 
-    copy RecompressPng\bin\Release\net5.0\NLog.config Artifacts\RecompressPng\
+    xcopy /Y RecompressPng\bin\Release\net5.0\x86\*.dll Artifacts\RecompressPng\x86\
 
-    copy RecompressPng\bin\Release\net5.0\*.dll Artifacts\RecompressPng\
-
-    copy RecompressPng\bin\Release\net5.0\*.json Artifacts\RecompressPng\
-
-    xcopy /E RecompressPng\bin\Release\net5.0\runtimes Artifacts\RecompressPng\runtimes\
-
-    copy RecompressPng\bin\Release\net5.0\RecompressPng.exe Artifacts\RecompressPng\
-
-    copy RecompressPng\bin\Release\net5.0\x64\*.dll Artifacts\RecompressPng\x64\
-
-    copy RecompressPng\bin\Release\net5.0\x86\*.dll Artifacts\RecompressPng\x86\
+    del Artifacts\RecompressPng\*.pdb
 
     cd Artifacts
 
