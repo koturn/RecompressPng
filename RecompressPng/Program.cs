@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -150,17 +151,16 @@ namespace RecompressPng
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('s', "strategies", OptionType.RequiredArgument,
-                "Filter strategies to try\n"
-                + indent2 + "0: Give all scanlines PNG filter type 0\n"
-                + indent2 + "1: Give all scanlines PNG filter type 1\n"
-                + indent2 + "2: Give all scanlines PNG filter type 2\n"
-                + indent2 + "3: Give all scanlines PNG filter type 3\n"
-                + indent2 + "4: Give all scanlines PNG filter type 4\n"
-                + indent2 + "5: Minimum sum\n"
-                + indent2 + "6: Entropy\n"
-                + indent2 + "7: Predefined (keep from input, this likely overlaps another strategy)\n"
-                + indent2 + "8: Brute force (experimental)",
-                "[0|1|2|3|4|5|6|7|8],...");
+                "Filter strategies to try:\n"
+                + indent3 + "0-4: give all scanlines PNG filter type 0-4\n"
+                + indent3 + "m: Minimum sum\n"
+                + indent3 + "e: Entropy\n"
+                + indent3 + "p: Predefined (keep from input, this likely overlaps another strategy)\n"
+                + indent3 + "b: Brute force (experimental)\n"
+                + indent2 + "By default, if this argument is not given, one that is most likely the best for this image is chosen by trying faster compression with each type.\n"
+                + indent2 + "If this argument is used, all given filter types are tried with slow compression and the best result retained.\n"
+                + indent2 + "A good set of filters to try is -s 0me.",
+                "0|1|2|3|4|m|e|p|b...");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "keep metadata chunks with these names that would normally be removed,\n"
@@ -207,9 +207,7 @@ namespace RecompressPng
 
             if (ap.HasValue('s'))
             {
-                zo.FilterStrategies.AddRange(ap.GetValue('s')
-                    .Split(',')
-                    .Select(token => (ZopfliPNGFilterStrategy)int.Parse(token)));
+                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('s')));
             }
             if (ap.HasValue("keep-chunks"))
             {
@@ -228,6 +226,48 @@ namespace RecompressPng
                     ap.GetValue<bool>('c'),
                     ap.GetValue<bool>('v'),
                     !ap.GetValue<bool>("no-verify-image")));
+        }
+
+        /// <summary>
+        /// Parse option value for "-s" or "--strategies".
+        /// </summary>
+        /// <param name="filterStrategiesString">Option value for "-s" or "--strategies".</param>
+        /// <returns>Enumeration of <see cref="ZopfliPNGFilterStrategy"/>.</returns>
+        private static IEnumerable<ZopfliPNGFilterStrategy> ParseFilterStrategiesString(string filterStrategiesString)
+        {
+            foreach (var c in filterStrategiesString)
+            {
+                switch (c)
+                {
+                    case '0':
+                        yield return ZopfliPNGFilterStrategy.Zero;
+                        break;
+                    case '1':
+                        yield return ZopfliPNGFilterStrategy.One;
+                        break;
+                    case '2':
+                        yield return ZopfliPNGFilterStrategy.Two;
+                        break;
+                    case '3':
+                        yield return ZopfliPNGFilterStrategy.Three;
+                        break;
+                    case '4':
+                        yield return ZopfliPNGFilterStrategy.Four;
+                        break;
+                    case 'm':
+                        yield return ZopfliPNGFilterStrategy.MinSum;
+                        break;
+                    case 'e':
+                        yield return ZopfliPNGFilterStrategy.Entropy;
+                        break;
+                    case 'p':
+                        yield return ZopfliPNGFilterStrategy.Predefined;
+                        break;
+                    case 'b':
+                        yield return ZopfliPNGFilterStrategy.BruteForce;
+                        break;
+                }
+            }
         }
 
         /// <summary>
