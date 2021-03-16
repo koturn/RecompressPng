@@ -609,12 +609,18 @@ namespace RecompressPng
         /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
         private static bool IsZipFile(string zipFilePath)
         {
-            var buffer = new byte[2];
+            var buffer = new byte[4];
             using (var fs = new FileStream(zipFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                fs.Read(buffer, 0, buffer.Length);
+                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+                {
+                    return false;
+                }
             }
-            return buffer[0] == 'P' && buffer[1] == 'K';
+            return buffer[0] == 'P'
+                && buffer[1] == 'K'
+                && buffer[2] == '\x03'
+                && buffer[3] == '\x04';
         }
 
         /// <summary>
