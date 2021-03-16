@@ -16,6 +16,8 @@ build_script:
 
     mkdir Artifacts\RecompressPng\x86
 
+    copy RecompressPng\bin\Release\NLog.config Artifacts\RecompressPng\
+
     copy RecompressPng\bin\Release\*.dll Artifacts\RecompressPng\
 
     copy RecompressPng\bin\Release\RecompressPng.exe Artifacts\RecompressPng\

@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using System.Web;
 using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
+using NLog;
 using ZopfliSharp;
 
 
@@ -26,9 +27,14 @@ namespace RecompressPng
     class Program
     {
         /// <summary>
-        /// Date time format for logging.
+        /// Logging instance.
         /// </summary>
-        private const string LogDateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff";
+        private static readonly Logger _logger;
+        /// <summary>
+        /// Memory comparator.
+        /// </summary>
+        private static MemoryComparator _memoryComparator;
+
 
         /// <summary>
         /// Setup DLL search path.
@@ -39,13 +45,8 @@ namespace RecompressPng
                 Path.Combine(
                     AppContext.BaseDirectory,
                     Environment.Is64BitProcess ? "x64" : "x86"));
+            _logger = LogManager.GetCurrentClassLogger();
         }
-
-
-        /// <summary>
-        /// Memory comparator.
-        /// </summary>
-        private static MemoryComparator _memoryComparator;
 
         /// <summary>
         /// An entry point of this program.
@@ -75,7 +76,7 @@ namespace RecompressPng
                     }
                     else
                     {
-                        Console.Error.WriteLine("Specified file is not zip archive");
+                        _logger.Fatal("Specified file is not zip archive: ", target);
                         return 1;
                     }
                 }
@@ -92,7 +93,7 @@ namespace RecompressPng
                 }
                 else
                 {
-                    Console.Error.WriteLine("Specified file doesn't exist");
+                    _logger.Fatal("Specified file or directory doesn't exist: {0}", target);
                     return 1;
                 }
 
@@ -100,26 +101,20 @@ namespace RecompressPng
             }
             catch (ArgumentParserException ex)
             {
-                Console.Error.WriteLine(ex.Message);
-
-                return 2;
+                _logger.Fatal(ex, "Failed to parse command-line arguments:");
+                return 64;
             }
             catch (AggregateException exs)
             {
                 foreach (var ex in exs.Flatten().InnerExceptions)
                 {
-                    Console.Error.WriteLine($"= = = {ex.GetType().Name} = = =");
-                    Console.Error.WriteLine($"Message = {ex.Message}");
-                    Console.Error.WriteLine($"StackTrace = {ex.StackTrace}");
+                    _logger.Fatal(ex, "AggregateException:");
                 }
-
-                return 3;
+                return 1;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine(ex.Message);
-                Console.Error.WriteLine(ex.StackTrace);
-
+                _logger.Fatal(ex, "An exception occured:");
                 return 1;
             }
             finally
@@ -343,7 +338,7 @@ namespace RecompressPng
                         {
                             if (!execOptions.IsDryRun)
                             {
-                                Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} ...");
+                                _logger.Info("[{0}] Copy {1} ...", procIndex, srcEntry.FullName);
                                 try
                                 {
                                     CreateEntryAndWriteData(
@@ -352,17 +347,21 @@ namespace RecompressPng
                                         ReadAllBytes(srcEntry, srcLock),
                                         dstLock,
                                         execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
-                                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds");
+                                    _logger.Info(
+                                        "[{0}] Copy {1} done: {2:F3} seconds",
+                                        procIndex,
+                                        srcEntry.FullName,
+                                        sw.ElapsedMilliseconds / 1000.0);
                                 }
                                 catch (Exception ex)
                                 {
-                                    Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Copy {srcEntry.FullName} failed: {ex.GetType().Name}; {ex.Message}");
+                                    _logger.Error(ex, "[{0}] Copy {1} failed: ", procIndex, srcEntry.FullName);
                                 }
                             }
                             return;
                         }
 
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} ...");
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var data = ReadAllBytes(srcEntry, srcLock);
@@ -401,11 +400,23 @@ namespace RecompressPng
                                     }
                                 }
                             }
-                            Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
+                            _logger.Info(
+                                "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                                procIndex,
+                                srcEntry.FullName,
+                                sw.ElapsedMilliseconds / 1000.0,
+                                ToMiB(data.LongLength),
+                                ToMiB(compressedData.LongLength),
+                                verifyResultMsg,
+                                CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
                         }
                         catch (Exception ex)
                         {
-                            Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} failed: {ex.GetType().Name}; {ex.Message}");
+                            _logger.Error(
+                                ex,
+                                "[{0}] Compress {1} failed:",
+                                procIndex,
+                                srcEntry.FullName);
                             lock (((ICollection)errorImageList).SyncRoot)
                             {
                                 errorImageList.Add(srcEntry.FullName);
@@ -423,25 +434,29 @@ namespace RecompressPng
             Console.WriteLine("- - -");
             if (nProcPngFiles == 0)
             {
-                Console.WriteLine("No PNG file were processed.");
+                _logger.Info("No PNG file were processed.");
                 return;
             }
-            Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
+            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
             if (!execOptions.IsDryRun)
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
-                Console.WriteLine($"{ToMiB(srcFileSize):F3} MiB -> {ToMiB(dstFileSize):F3} MiB (deflated {CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0:F2}%)");
+                _logger.Info(
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    ToMiB(srcFileSize),
+                    ToMiB(dstFileSize),
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
             }
             if (execOptions.IsVerifyImage)
             {
                 if (diffImageList.Count == 0)
                 {
-                    Console.WriteLine("All the image data before and after re-compressing are the same.");
+                    _logger.Info("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    Console.WriteLine($"{diffImageList.Count} / {nProcPngFiles} PNG files are different image.");
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
                     int cnt = 1;
                     foreach (var fullname in diffImageList)
                     {
@@ -452,7 +467,7 @@ namespace RecompressPng
             }
             if (errorImageList.Count > 0)
             {
-                Console.WriteLine($"There are {errorImageList.Count} PNG files that encountered errors during processing.");
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
                 int cnt = 1;
                 foreach (var fullname in diffImageList)
                 {
@@ -498,7 +513,7 @@ namespace RecompressPng
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
                             .ToString());
 
-                    Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} ...");
+                    _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
                     try
                     {
                         var data = File.ReadAllBytes(srcFilePath);
@@ -544,11 +559,19 @@ namespace RecompressPng
                                 }
                             }
                         }
-                        Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
+                        _logger.Info(
+                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            procIndex,
+                            srcRelPath,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            ToMiB(data.LongLength),
+                            ToMiB(compressedData.LongLength),
+                            verifyResultMsg,
+                            CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} failed: {ex.GetType().Name}; {ex.Message}");
+                        _logger.Error(ex, "[{0}] Compress {1} failed", procIndex, srcRelPath);
                         lock (((ICollection)errorImageList).SyncRoot)
                         {
                             errorImageList.Add(srcRelPath);
@@ -559,21 +582,25 @@ namespace RecompressPng
             Console.WriteLine("- - -");
             if (nProcPngFiles == 0)
             {
-                Console.WriteLine("No PNG file were processed.");
+                _logger.Info("No PNG file were processed.");
                 return;
             }
-            Console.WriteLine($"All PNG files were proccessed ({nProcPngFiles} files).");
-            Console.WriteLine($"Elapsed time: {totalSw.ElapsedMilliseconds / 1000.0:F3} seconds.");
-            Console.WriteLine($"{ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
+            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            _logger.Info(
+                "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                ToMiB(srcTotalFileSize),
+                ToMiB(dstTotalFileSize),
+                CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0);
             if (execOptions.IsVerifyImage)
             {
                 if (diffImageList.Count == 0)
                 {
-                    Console.WriteLine("All the image data before and after re-compressing are the same.");
+                    _logger.Info("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    Console.WriteLine($"{diffImageList.Count} / {nProcPngFiles} PNG files are different image.");
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
                     int cnt = 1;
                     foreach (var relPath in diffImageList)
                     {
@@ -584,7 +611,7 @@ namespace RecompressPng
             }
             if (errorImageList.Count > 0)
             {
-                Console.WriteLine($"There are {errorImageList.Count} PNG files that encountered errors during processing.");
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
                 int cnt = 1;
                 foreach (var relPath in diffImageList)
                 {
