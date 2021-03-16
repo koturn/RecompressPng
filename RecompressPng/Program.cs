@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -320,10 +321,10 @@ namespace RecompressPng
             }
 
             int nProcPngFiles = 0;
-            int nDiffImages = 0;
-            int nErrors = 0;
-            var totalSw = Stopwatch.StartNew();
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
+            var diffImageList = new List<string>();
+            var errorImageList = new List<string>();
+            var totalSw = Stopwatch.StartNew();
 
             using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
             using (var dstArchive = execOptions.IsDryRun ? null : ZipFile.Open(dstZipFilePath, ZipArchiveMode.Create))
@@ -394,7 +395,10 @@ namespace RecompressPng
                                 else
                                 {
                                     verifyResultMsg = " (different image)";
-                                    Interlocked.Increment(ref nDiffImages);
+                                    lock (((ICollection)diffImageList).SyncRoot)
+                                    {
+                                        diffImageList.Add(srcEntry.FullName);
+                                    }
                                 }
                             }
                             Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
@@ -402,7 +406,10 @@ namespace RecompressPng
                         catch (Exception ex)
                         {
                             Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcEntry.FullName} failed: {ex.GetType().Name}; {ex.Message}");
-                            Interlocked.Increment(ref nErrors);
+                            lock (((ICollection)errorImageList).SyncRoot)
+                            {
+                                errorImageList.Add(srcEntry.FullName);
+                            }
                         }
                     });
             }
@@ -428,18 +435,30 @@ namespace RecompressPng
             }
             if (execOptions.IsVerifyImage)
             {
-                if (nDiffImages == 0)
+                if (diffImageList.Count == 0)
                 {
                     Console.WriteLine("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    Console.WriteLine($"{nDiffImages} / {nProcPngFiles} PNG files are different image.");
+                    Console.WriteLine($"{diffImageList.Count} / {nProcPngFiles} PNG files are different image.");
+                    int cnt = 1;
+                    foreach (var fullname in diffImageList)
+                    {
+                        Console.WriteLine($"Different image [{cnt}]: {fullname}");
+                        cnt++;
+                    }
                 }
             }
-            if (nErrors > 0)
+            if (errorImageList.Count > 0)
             {
-                Console.WriteLine($"There are {nErrors} PNG files that encountered errors during processing.");
+                Console.WriteLine($"There are {errorImageList.Count} PNG files that encountered errors during processing.");
+                int cnt = 1;
+                foreach (var fullname in diffImageList)
+                {
+                    Console.WriteLine($"Error image [{cnt}]: {fullname}");
+                    cnt++;
+                }
             }
         }
 
@@ -461,8 +480,8 @@ namespace RecompressPng
             var dstTotalFileSize = 0L;
 
             int nProcPngFiles = 0;
-            int nDiffImages = 0;
-            int nErrors = 0;
+            var diffImageList = new List<string>();
+            var errorImageList = new List<string>();
             var totalSw = Stopwatch.StartNew();
 
             Parallel.ForEach(
@@ -519,7 +538,10 @@ namespace RecompressPng
                             else
                             {
                                 verifyResultMsg = " (different image)";
-                                Interlocked.Increment(ref nDiffImages);
+                                lock (((ICollection)diffImageList).SyncRoot)
+                                {
+                                    diffImageList.Add(srcRelPath);
+                                }
                             }
                         }
                         Console.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} done: {sw.ElapsedMilliseconds / 1000.0:F3} seconds, {ToMiB(data.LongLength):F3} MiB -> {ToMiB(compressedData.LongLength):F3} MiB{verifyResultMsg} (deflated {CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0:F2}%)");
@@ -527,7 +549,10 @@ namespace RecompressPng
                     catch (Exception ex)
                     {
                         Console.Error.WriteLine($"{DateTime.Now.ToString(LogDateTimeFormat)}: [{procIndex}] Compress {srcRelPath} failed: {ex.GetType().Name}; {ex.Message}");
-                        Interlocked.Increment(ref nErrors);
+                        lock (((ICollection)errorImageList).SyncRoot)
+                        {
+                            errorImageList.Add(srcRelPath);
+                        }
                     }
                 });
 
@@ -542,18 +567,30 @@ namespace RecompressPng
             Console.WriteLine($"{ToMiB(srcTotalFileSize):F3} MiB -> {ToMiB(dstTotalFileSize):F3} MiB (deflated {CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0:F2}%)");
             if (execOptions.IsVerifyImage)
             {
-                if (nDiffImages == 0)
+                if (diffImageList.Count == 0)
                 {
                     Console.WriteLine("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    Console.WriteLine($"{nDiffImages} / {nProcPngFiles} PNG files are different image.");
+                    Console.WriteLine($"{diffImageList.Count} / {nProcPngFiles} PNG files are different image.");
+                    int cnt = 1;
+                    foreach (var relPath in diffImageList)
+                    {
+                        Console.WriteLine($"Different image [{cnt}]: {relPath}");
+                        cnt++;
+                    }
                 }
             }
-            if (nErrors > 0)
+            if (errorImageList.Count > 0)
             {
-                Console.WriteLine($"There are {nErrors} PNG files that encountered errors during processing.");
+                Console.WriteLine($"There are {errorImageList.Count} PNG files that encountered errors during processing.");
+                int cnt = 1;
+                foreach (var relPath in diffImageList)
+                {
+                    Console.WriteLine($"Error image [{cnt}]: {relPath}");
+                    cnt++;
+                }
             }
         }
 
