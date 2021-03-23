@@ -938,7 +938,7 @@ namespace RecompressPng
             /// </summary>
             /// <param name="path">Path to DLL directory.</param>
             /// <returns>True if success to set directory, otherwise false.</returns>
-            [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             [SuppressUnmanagedCodeSecurity]
             public static extern bool SetDllDirectory([In] string path);
         }
