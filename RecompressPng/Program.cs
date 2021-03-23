@@ -326,6 +326,34 @@ namespace RecompressPng
             {
                 var srcLock = new object();
                 var dstLock = execOptions.IsDryRun ? null : new object();
+
+                void CopyZipEntry(ZipArchiveEntry srcEntry, int procIndex, Stopwatch sw)
+                {
+                    if (execOptions.IsDryRun)
+                    {
+                        return;
+                    }
+                    _logger.Info("[{0}] Copy {1} ...", procIndex, srcEntry.FullName);
+                    try
+                    {
+                        CreateEntryAndWriteData(
+                            dstArchive,
+                            srcEntry.FullName,
+                            ReadAllBytes(srcEntry, srcLock),
+                            dstLock,
+                            execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
+                        _logger.Info(
+                            "[{0}] Copy {1} done: {2:F3} seconds",
+                            procIndex,
+                            srcEntry.FullName,
+                            sw.ElapsedMilliseconds / 1000.0);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "[{0}] Copy {1} failed: ", procIndex, srcEntry.FullName);
+                    }
+                }
+
                 Parallel.ForEach(
                     srcArchive.Entries,
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
@@ -336,28 +364,7 @@ namespace RecompressPng
 
                         if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (!execOptions.IsDryRun)
-                            {
-                                _logger.Info("[{0}] Copy {1} ...", procIndex, srcEntry.FullName);
-                                try
-                                {
-                                    CreateEntryAndWriteData(
-                                        dstArchive,
-                                        srcEntry.FullName,
-                                        ReadAllBytes(srcEntry, srcLock),
-                                        dstLock,
-                                        execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
-                                    _logger.Info(
-                                        "[{0}] Copy {1} done: {2:F3} seconds",
-                                        procIndex,
-                                        srcEntry.FullName,
-                                        sw.ElapsedMilliseconds / 1000.0);
-                                }
-                                catch (Exception ex)
-                                {
-                                    _logger.Error(ex, "[{0}] Copy {1} failed: ", procIndex, srcEntry.FullName);
-                                }
-                            }
+                            CopyZipEntry(srcEntry, procIndex, sw);
                             return;
                         }
 
@@ -417,6 +424,7 @@ namespace RecompressPng
                                 "[{0}] Compress {1} failed:",
                                 procIndex,
                                 srcEntry.FullName);
+                            CopyZipEntry(srcEntry, procIndex, sw);
                             lock (((ICollection)errorImageList).SyncRoot)
                             {
                                 errorImageList.Add(srcEntry.FullName);
