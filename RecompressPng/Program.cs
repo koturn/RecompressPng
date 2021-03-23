@@ -400,8 +400,7 @@ namespace RecompressPng
                                     execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
                             }
 
-                            // The comparison of image data is considered to take a little longer.
-                            // Therefore, atomically incremented nDiffImages outside of the lock statement.
+                            var logLevel = LogLevel.Info;
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
@@ -412,13 +411,15 @@ namespace RecompressPng
                                 else
                                 {
                                     verifyResultMsg = " (different image)";
+                                    logLevel = LogLevel.Warn;
                                     lock (((ICollection)diffImageList).SyncRoot)
                                     {
                                         diffImageList.Add(srcEntry.FullName);
                                     }
                                 }
                             }
-                            _logger.Info(
+                            _logger.Log(
+                                logLevel,
                                 "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
                                 procIndex,
                                 srcEntry.FullName,
@@ -567,6 +568,7 @@ namespace RecompressPng
                         Interlocked.Add(ref srcTotalFileSize, data.Length);
                         Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
 
+                        var logLevel = LogLevel.Info;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
@@ -576,6 +578,7 @@ namespace RecompressPng
                             }
                             else
                             {
+                                logLevel = LogLevel.Warn;
                                 verifyResultMsg = " (different image)";
                                 lock (((ICollection)diffImageList).SyncRoot)
                                 {
@@ -583,7 +586,8 @@ namespace RecompressPng
                                 }
                             }
                         }
-                        _logger.Info(
+                        _logger.Log(
+                            logLevel,
                             "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
                             procIndex,
                             srcRelPath,
