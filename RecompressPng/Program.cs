@@ -31,6 +31,10 @@ namespace RecompressPng
         /// </summary>
         private static readonly Logger _logger;
         /// <summary>
+        /// Signature of PNG file.
+        /// </summary>
+        private static readonly byte[] PngSignature;
+        /// <summary>
         /// Memory comparator.
         /// </summary>
         private static MemoryComparator _memoryComparator;
@@ -46,6 +50,7 @@ namespace RecompressPng
                     AppContext.BaseDirectory,
                     Environment.Is64BitProcess ? "x64" : "x86"));
             _logger = LogManager.GetCurrentClassLogger();
+            PngSignature = new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a };
         }
 
         /// <summary>
@@ -372,6 +377,12 @@ namespace RecompressPng
                         try
                         {
                             var data = ReadAllBytes(srcEntry, srcLock);
+                            if (!HasPngSignature(data))
+                            {
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                                CopyZipEntry(srcEntry, procIndex, sw);
+                                return;
+                            }
 
                             // Take a long time
                             var compressedData = ZopfliPng.OptimizePng(
@@ -525,6 +536,11 @@ namespace RecompressPng
                     try
                     {
                         var data = File.ReadAllBytes(srcFilePath);
+                        if (!HasPngSignature(data))
+                        {
+                            _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                            return;
+                        }
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                         // Take a long time
@@ -675,7 +691,7 @@ namespace RecompressPng
 
         /// <summary>
         /// <para>Identify zip archive file or not.</para>
-        /// <para>Just determine if the first two bytes are 'P' and 'K'.</para>
+        /// <para>Just determine if the first four bytes are 'P', 'K', 0x03 and 0x04.</para>
         /// </summary>
         /// <param name="zipFilePath">Target zip file path,</param>
         /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
@@ -689,10 +705,45 @@ namespace RecompressPng
                     return false;
                 }
             }
-            return buffer[0] == 'P'
-                && buffer[1] == 'K'
-                && buffer[2] == '\x03'
-                && buffer[3] == '\x04';
+            return HasZipSignature(buffer);
+        }
+
+        /// <summary>
+        /// <para>Identify the specified binary data has a zip signature or not.</para>
+        /// <para>Just determine if the first four bytes are 'P', 'K', 0x03 and 0x04.</para>
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a zip signature, otherwise false.</returns>
+        private static bool HasZipSignature(byte[] data)
+        {
+            return data.Length >= 4
+                && data[0] == 'P'
+                && data[1] == 'K'
+                && data[2] == '\x03'
+                && data[3] == '\x04';
+        }
+
+        /// <summary>
+        /// Identify the specified binary data has a PNG signature or not.
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
+        private static bool HasPngSignature(byte[] data)
+        {
+            if (data.Length < PngSignature.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < PngSignature.Length; i++)
+            {
+                if (data[i] != PngSignature[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
