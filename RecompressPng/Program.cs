@@ -310,10 +310,9 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
-            dstZipFilePath = dstZipFilePath
-                ?? Path.Combine(
-                    Path.GetDirectoryName(srcZipFilePath),
-                    Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
+            dstZipFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
 
             if (File.Exists(dstZipFilePath))
             {
@@ -506,7 +505,7 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
-            dstDirPath = dstDirPath ?? (srcDirPath + ".zopfli");
+            dstDirPath ??= (srcDirPath + ".zopfli");
 
             var srcBaseDirFullPath = Path.GetFullPath(srcDirPath);
             var dstBaseDirFullPath = Path.GetFullPath(dstDirPath);
@@ -774,10 +773,8 @@ namespace RecompressPng
             var data = new byte[entry.Length];
             lock (lockObj)
             {
-                using (var zs = entry.Open())
-                {
-                    zs.Read(data, 0, data.Length);
-                }
+                using var zs = entry.Open();
+                zs.Read(data, 0, data.Length);
             }
             return data;
         }
@@ -799,10 +796,8 @@ namespace RecompressPng
                 {
                     dstEntry.LastWriteTime = timestamp.Value;
                 }
-                using (var dstZs = dstEntry.Open())
-                {
-                    dstZs.Write(data, 0, data.Length);
-                }
+                using var dstZs = dstEntry.Open();
+                dstZs.Write(data, 0, data.Length);
             }
         }
 
@@ -835,11 +830,9 @@ namespace RecompressPng
         /// <returns>True if two image data are same, otherwise false.</returns>
         private static bool CompareImage(byte[] imgData1, byte[] imgData2)
         {
-            using (var bmp1 = CreateBitmapFromByteArray(imgData1))
-            using (var bmp2 = CreateBitmapFromByteArray(imgData2))
-            {
-                return CompareImage(bmp1, bmp2) || _memoryComparator.CompareMemory(imgData1, imgData2);
-            }
+            using var bmp1 = CreateBitmapFromByteArray(imgData1);
+            using var bmp2 = CreateBitmapFromByteArray(imgData2);
+            return CompareImage(bmp1, bmp2) || _memoryComparator.CompareMemory(imgData1, imgData2);
         }
 
         /// <summary>
@@ -852,12 +845,10 @@ namespace RecompressPng
         /// <returns>True if two image data are same, otherwise false.</returns>
         private static bool CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
         {
-            using (var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1))
-            using (var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2))
-            {
-                return CompareImage(bmp1, bmp2)
-                    || (imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length));
-            }
+            using var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1);
+            using var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2);
+            return CompareImage(bmp1, bmp2)
+                || (imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length));
         }
 
         /// <summary>
@@ -921,10 +912,8 @@ namespace RecompressPng
         /// <returns><see cref="Bitmap"/> instance.</returns>
         private static Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
         {
-            using (var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false))
-            {
-                return (Bitmap)Image.FromStream(ms);
-            }
+            using var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false);
+            return (Bitmap)Image.FromStream(ms);
         }
 
         /// <summary>
