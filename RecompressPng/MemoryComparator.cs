@@ -148,7 +148,7 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
-        public static unsafe bool CompareMemoryNaiveX64(IntPtr pData1, IntPtr  pData2, UIntPtr dataLength)
+        public static unsafe bool CompareMemoryNaiveX64(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
             return CompareMemoryNaiveX64((byte*)pData1, (byte*)pData2, (ulong)dataLength);
         }
@@ -193,9 +193,9 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
-        public static unsafe bool CompareMemoryNaiveX86(IntPtr pData1, IntPtr  pData2, UIntPtr dataLength)
+        public static unsafe bool CompareMemoryNaiveX86(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
-            return CompareMemoryNaiveX64((byte*)pData1, (byte*)pData2, (uint)dataLength);
+            return CompareMemoryNaiveX86((byte*)pData1, (byte*)pData2, (uint)dataLength);
         }
 
 
