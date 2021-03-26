@@ -1,9 +1,16 @@
-﻿using System;
+﻿#if NETCOREAPP3_0_OR_GREATER
+#    define NET_SIMD
+#endif  // NETCOREAPP3_0_OR_GREATER
+using System;
 using System.Runtime.InteropServices;
 using System.Security;
 
+#if NET_SIMD
+using System.Runtime.Intrinsics.X86;
+#else
 using NativeCodeSharp;
 using NativeCodeSharp.Intrinsics;
+#endif  // NET_SIMD
 
 
 namespace RecompressPng
@@ -31,10 +38,12 @@ namespace RecompressPng
         public bool IsDisposed { get; private set; }
 
 
+#if !NET_SIMD
         /// <summary>
         /// Native method handle of memory comparison function.
         /// </summary>
         private NativeMethodHandle<CompareMemoryDelegate> _compareMemoryMethodHandle;
+#endif  // !NET_SIMD
         /// <summary>
         /// Delegate of memory comparison method.
         /// </summary>
@@ -47,12 +56,23 @@ namespace RecompressPng
         public MemoryComparator()
         {
             IsDisposed = false;
+#if NET_SIMD
+            if (Avx2.IsSupported)
+            {
+                _compareMemory = CompareMemoryAvx2;
+            }
+            else if (Sse2.IsSupported)
+            {
+                _compareMemory = CompareMemorySse2;
+            }
+#else
             var mh = CreateAppropreateCompareMemoryMethodHandle();
             if (mh != null)
             {
                 _compareMemoryMethodHandle = mh;
                 _compareMemory = mh.Method;
             }
+#endif  // NET_SIMD
             else if (Environment.Is64BitProcess)
             {
                 _compareMemory = CompareMemoryNaiveX64;
@@ -79,11 +99,13 @@ namespace RecompressPng
             if (disposing)
             {
                 _compareMemory = null;
+#if !NET_SIMD
                 if (_compareMemoryMethodHandle != null)
                 {
                     _compareMemoryMethodHandle.Dispose();
                     _compareMemoryMethodHandle = null;
                 }
+#endif  // !NET_SIMD
             }
             IsDisposed = true;
         }
@@ -230,6 +252,104 @@ namespace RecompressPng
             return true;
         }
 
+
+#if NET_SIMD
+        /// <summary>
+        /// Compare two byte data using SSE2 instrunctions.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemorySse2(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
+        {
+            return CompareMemorySse2((byte*)pData1, (byte*)pData2, (uint)dataLength);
+        }
+
+
+        /// <summary>
+        /// Compare two byte data using SSE2 instrunctions.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemorySse2(byte* pData1, byte* pData2, ulong dataLength)
+        {
+            const ulong stride = 16;
+            var n = dataLength / stride * stride;
+
+            for (ulong i = 0; i < n; i += stride)
+            {
+                if (Sse2.MoveMask(
+                    Sse2.CompareEqual(
+                        Sse2.LoadVector128(&pData1[i]),
+                        Sse2.LoadVector128(&pData2[i]))) != 0xffff)
+                {
+                    return false;
+                }
+            }
+
+            for (ulong i = n; i < dataLength; i++)
+            {
+                if (pData1[i] != pData2[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+
+        /// <summary>
+        /// Compare two byte data using AVX2 instrunctions.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemoryAvx2(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
+        {
+            return CompareMemoryAvx2((byte*)pData1, (byte*)pData2, (uint)dataLength);
+        }
+
+
+        /// <summary>
+        /// Compare two byte data using AVX2 instrunctions.
+        /// </summary>
+        /// <param name="pData1">First pointer to byte data array.</param>
+        /// <param name="pData2">Second pointer to byte data array.</param>
+        /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public static unsafe bool CompareMemoryAvx2(byte* pData1, byte* pData2, ulong dataLength)
+        {
+            const ulong stride = 32;
+            var n = dataLength / stride * stride;
+
+            for (ulong i = 0; i < n; i += stride)
+            {
+                if (Avx2.MoveMask(
+                    Avx2.CompareEqual(
+                        Avx.LoadVector256(&pData1[i]),
+                        Avx.LoadVector256(&pData2[i]))) != -1)
+                {
+                    return false;
+                }
+            }
+
+            for (ulong i = n; i < dataLength; i++)
+            {
+                if (pData1[i] != pData2[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+#else
 
         /// <summary>
         /// <para>Create native method handle of appropreate memory compare function using SIMD instruction
@@ -481,5 +601,6 @@ namespace RecompressPng
                     0xc3                                       // ret
                 });
         }
+#endif  // NET_SIMD
     }
 }
