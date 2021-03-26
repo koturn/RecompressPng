@@ -908,7 +908,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData)
+        private static Bitmap CreateBitmapFromByteArray(byte[] imgData)
         {
             return CreateBitmapFromByteArray(imgData, imgData.LongLength);
         }
@@ -919,7 +919,7 @@ namespace RecompressPng
         /// <param name="imgData">Image data.</param>
         /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static unsafe Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
+        private static Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
         {
             using (var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false))
             {
