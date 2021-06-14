@@ -17,6 +17,7 @@ using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
 using NLog;
 using ZopfliSharp;
+using RecompressPng.VRM;
 
 
 namespace RecompressPng
@@ -77,6 +78,16 @@ namespace RecompressPng
                         else
                         {
                             RecompressPngInZipArchive(target, null, pngOptions, execOptions);
+                        }
+                    }
+                    else if (target.EndsWith(".vrm", StringComparison.OrdinalIgnoreCase) || target.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (execOptions.IsCountOnly)
+                        {
+                        }
+                        else
+                        {
+                            RecompressPngInVrm(target, null, pngOptions, execOptions);
                         }
                     }
                     else
@@ -461,6 +472,186 @@ namespace RecompressPng
             if (!execOptions.IsDryRun)
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
+                _logger.Info(
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    ToMiB(srcFileSize),
+                    ToMiB(dstFileSize),
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
+            }
+            if (execOptions.IsVerifyImage)
+            {
+                if (diffImageList.Count == 0)
+                {
+                    _logger.Info("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
+                    int cnt = 1;
+                    foreach (var fullname in diffImageList)
+                    {
+                        Console.WriteLine($"Different image [{cnt}]: {fullname}");
+                        cnt++;
+                    }
+                }
+            }
+            if (errorImageList.Count > 0)
+            {
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
+                int cnt = 1;
+                foreach (var fullname in diffImageList)
+                {
+                    Console.WriteLine($"Error image [{cnt}]: {fullname}");
+                    cnt++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
+        /// </summary>
+        /// <param name="srcVrmFilePath">Source zip archive file.</param>
+        /// <param name="dstVrmFilePath">Destination zip archive file.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        private static void RecompressPngInVrm(string srcVrmFilePath, string dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        {
+            dstVrmFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcVrmFilePath),
+                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli.vrm");
+
+            if (File.Exists(dstVrmFilePath))
+            {
+                File.Delete(dstVrmFilePath);
+            }
+
+            var (glbHeader, glbChunks) = VRMUtil.ParseChunk(srcVrmFilePath);
+            var (gltfJson, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+
+            int nProcPngFiles = 0;
+            var srcFileSize = new FileInfo(srcVrmFilePath).Length;
+            var diffImageList = new List<string>();
+            var errorImageList = new List<string>();
+            var totalSw = Stopwatch.StartNew();
+
+            Parallel.ForEach(
+                imageIndexes,
+                new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
+                imageIndex =>
+                {
+                    var data = binaryBuffers[imageIndex.Index];
+                    if (imageIndex.MimeType != "image/png" || !HasPngSignature(data))
+                    {
+                        return;
+                    }
+
+                    var sw = Stopwatch.StartNew();
+                    var procIndex = Interlocked.Increment(ref nProcPngFiles);
+
+                    var displayName = $"[{imageIndex.Index}] {imageIndex.Name}";
+                    _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
+                    try
+                    {
+                        // Take a long time
+                        var compressedData = ZopfliPng.OptimizePng(
+                            data,
+                            pngOptions,
+                            execOptions.Verbose);
+
+                        if (!execOptions.IsDryRun && compressedData.Length < data.Length)
+                        {
+                            binaryBuffers[imageIndex.Index] = compressedData;
+                        }
+
+                        var logLevel = LogLevel.Info;
+                        var verifyResultMsg = "";
+                        if (execOptions.IsVerifyImage)
+                        {
+                            if (CompareImage(data, data.LongLength, compressedData, compressedData.LongLength))
+                            {
+                                verifyResultMsg = " (same image)";
+                            }
+                            else
+                            {
+                                verifyResultMsg = " (different image)";
+                                logLevel = LogLevel.Warn;
+                                lock (((ICollection)diffImageList).SyncRoot)
+                                {
+                                    diffImageList.Add(displayName);
+                                }
+                            }
+                        }
+                        _logger.Log(
+                            logLevel,
+                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            procIndex,
+                            displayName,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            ToMiB(data.LongLength),
+                            ToMiB(compressedData.LongLength),
+                            verifyResultMsg,
+                            CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(
+                            ex,
+                            "[{0}] Compress {1} failed:",
+                            procIndex,
+                            displayName);
+                        lock (((ICollection)errorImageList).SyncRoot)
+                        {
+                            errorImageList.Add(displayName);
+                        }
+                    }
+                });
+
+            if (!execOptions.IsDryRun)
+            {
+                int nOffset = 0;
+                for (int i = 0, cnt = binaryBuffers.Count; i < cnt; i++)
+                {
+                    var buffer = binaryBuffers[i];
+                    gltfJson["bufferViews"][i]["byteOffset"] = nOffset;
+                    gltfJson["bufferViews"][i]["byteLength"] = buffer.Length;
+                    nOffset += buffer.Length;
+                }
+
+                glbChunks[1].Length = nOffset;
+                glbChunks[0].Data = Encoding.UTF8.GetBytes(gltfJson.ToString());
+                glbChunks[0].Length = glbChunks[0].Data.Length;
+                glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
+
+                using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                {
+                    glbHeader.WriteTo(stream);
+                    glbChunks[0].WriteTo(stream);
+                    stream.Write(BitConverter.GetBytes(glbChunks[1].Length));
+                    stream.Write(BitConverter.GetBytes(glbChunks[1].ChunkType));
+                    foreach (var buf in binaryBuffers)
+                    {
+                        stream.Write(buf);
+                    }
+                }
+
+                if (execOptions.IsOverwrite)
+                {
+                    File.Delete(srcVrmFilePath);
+                    File.Move(dstVrmFilePath, srcVrmFilePath);
+                }
+            }
+
+            Console.WriteLine("- - -");
+            if (nProcPngFiles == 0)
+            {
+                _logger.Info("No PNG file were processed.");
+                return;
+            }
+            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            if (!execOptions.IsDryRun)
+            {
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcVrmFilePath : dstVrmFilePath).Length;
                 _logger.Info(
                     "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
                     ToMiB(srcFileSize),
