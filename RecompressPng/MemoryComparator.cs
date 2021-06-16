@@ -116,6 +116,7 @@ namespace RecompressPng
         /// </summary>
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
             Dispose(true);
         }
         #endregion
