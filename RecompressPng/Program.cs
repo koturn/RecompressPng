@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -27,6 +28,15 @@ namespace RecompressPng
     /// </summary>
     class Program
     {
+        /// <summary>
+        /// Chunk type string of IDAT chunk.
+        /// </summary>
+        private const string ChunkTypeIdat = "IDAT";
+        /// <summary>
+        /// Chunk type string of IEND chunk.
+        /// </summary>
+        private const string ChunkTypeIend = "IEND";
+
         /// <summary>
         /// Logging instance.
         /// </summary>
@@ -175,6 +185,11 @@ namespace RecompressPng
                 + indent2 + "A good set of filters to try is -s 0me.",
                 "0|1|2|3|4|m|e|p|b...");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
+            ap.Add("idat-size", OptionType.RequiredArgument,
+                "Specify chunk data size in IDAT.\n"
+                    + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
+                    + indent2 + "0 or negative value means no splitting",
+                "SIZE", -1);
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "keep metadata chunks with these names that would normally be removed,\n"
                     + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
@@ -235,6 +250,7 @@ namespace RecompressPng
                     !ap.GetValue<bool>("no-overwrite"),
                     ap.GetValue<bool>('r'),
                     !ap.GetValue<bool>("no-keep-timestamp"),
+                    ap.GetValue<int>("idat-size"),
                     ap.GetValue<bool>('d'),
                     ap.GetValue<bool>('c'),
                     ap.GetValue<bool>('v'),
@@ -401,6 +417,11 @@ namespace RecompressPng
                                 pngOptions,
                                 execOptions.Verbose);
 
+                            if (execOptions.IdatSize > 0)
+                            {
+                                compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                            }
+
                             if (!execOptions.IsDryRun)
                             {
                                 CreateEntryAndWriteData(
@@ -558,6 +579,11 @@ namespace RecompressPng
                             data,
                             pngOptions,
                             execOptions.Verbose);
+
+                        if (execOptions.IdatSize > 0)
+                        {
+                            compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                        }
 
                         if (!execOptions.IsDryRun && compressedData.Length < data.Length)
                         {
@@ -737,6 +763,11 @@ namespace RecompressPng
 
                         // Take a long time
                         var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
+
+                        if (execOptions.IdatSize > 0)
+                        {
+                            compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                        }
 
                         if (!execOptions.IsDryRun)
                         {
@@ -954,6 +985,16 @@ namespace RecompressPng
         /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
         private static bool HasPngSignature(byte[] data)
         {
+            return HasPngSignature(data.AsSpan());
+        }
+
+        /// <summary>
+        /// Identify the specified binary data has a PNG signature or not.
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
+        private static bool HasPngSignature(Span<byte> data)
+        {
             if (data.Length < PngSignature.Length)
             {
                 return false;
@@ -968,6 +1009,80 @@ namespace RecompressPng
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Split IDAT chunk into the specified size.
+        /// </summary>
+        /// <param name="pngData">Source PNG data.</param>
+        /// <param name="idatSize">Size of part of data of the IDAT.</param>
+        /// <returns>New PNG data whose IDAT is splitted into specified size.</returns>
+        private static byte[] SplitIdatChunk(byte[] pngData, int idatSize)
+        {
+            using var ims = new MemoryStream(pngData);
+            using var oms = new MemoryStream(pngData.Length + (pngData.Length / idatSize - 1) * 12);
+            SplitIdat(ims, oms, idatSize);
+            return oms.ToArray();
+        }
+
+        /// <summary>
+        /// Split IDAT chunk into the specified size.
+        /// </summary>
+        /// <param name="srcPngStream">Source PNG data stream.</param>
+        /// <param name="dstPngStream">Destination data stream.</param>
+        /// <param name="idatSize">Size of part of data of the IDAT.</param>
+        private static void SplitIdat(Stream srcPngStream, Stream dstPngStream, int idatSize)
+        {
+            Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
+            if (srcPngStream.Read(pngSignature) < pngSignature.Length)
+            {
+                throw new Exception("Source PNG file data is too small.");
+            }
+
+            if (!HasPngSignature(pngSignature))
+            {
+                var sb = new StringBuilder();
+                foreach (var b in pngSignature)
+                {
+                    sb.Append($" {b:2X}");
+                }
+                throw new InvalidDataException($"Invalid PNG signature:{sb}");
+            }
+
+            // Write PNG Signature
+            dstPngStream.Write(PngSignature, 0, PngSignature.Length);
+
+            using var bw = new BinaryWriter(dstPngStream, Encoding.ASCII, true);
+            PngChunk pngChunk;
+            do
+            {
+                pngChunk = PngChunk.ReadOneChunk(srcPngStream);
+                if (pngChunk.Type == ChunkTypeIdat)
+                {
+                    using var idatMs = new MemoryStream((int)srcPngStream.Length);
+                    do
+                    {
+                        idatMs.Write(pngChunk.Data);
+                        pngChunk = PngChunk.ReadOneChunk(srcPngStream);
+                    } while (pngChunk.Type == ChunkTypeIdat);
+                    idatMs.Position = 0;
+
+                    var idatData = new byte[idatSize];
+                    var chunkTypeDataIdat = Encoding.ASCII.GetBytes(ChunkTypeIdat);
+                    for (var nRead = idatMs.Read(idatData); nRead != 0; nRead = idatMs.Read(idatData))
+                    {
+                        bw.Write(BinaryPrimitives.ReverseEndianness(nRead));
+                        bw.Write(chunkTypeDataIdat);
+                        bw.Write(idatData, 0, nRead);
+
+                        var crc32 = Crc32Calculator.Update(chunkTypeDataIdat);
+                        crc32 = Crc32Calculator.Update(idatData, 0, nRead, crc32);
+                        crc32 = Crc32Calculator.Finalize(crc32);
+                        bw.Write(BinaryPrimitives.ReverseEndianness(crc32));
+                    }
+                }
+                pngChunk.WriteTo(dstPngStream);
+            } while (pngChunk.Type != ChunkTypeIend);
         }
 
         /// <summary>

@@ -27,6 +27,10 @@
         /// </summary>
         public bool IsKeepTimestamp { get; set; }
         /// <summary>
+        /// Size of each data part of IDAT chunk.
+        /// </summary>
+        public int IdatSize { get; set; }
+        /// <summary>
         /// Don't save any files, just see the console output.
         /// </summary>
         public bool IsDryRun { get; set; }
@@ -57,6 +61,7 @@
         /// <param name="isOverwrite">Overwrite original files.</param>
         /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
         /// <param name="isKeepTimestamp">Keep timestamp of original file.</param>
+        /// <param name="idatSize">Size of each data part of IDAT chunk.</param>
         /// <param name="isDryRun">Don't save any files, just see the console output.</param>
         /// <param name="isCountOnly">Count target PNG files and exit this program.</param>
         /// <param name="verbose">Allow to output to stdout from zopflipng.dll.</param>
@@ -66,6 +71,7 @@
             bool isOverwrite = false,
             bool isReplaceForce = false,
             bool isKeepTimestamp = true,
+            int idatSize = -1,
             bool isDryRun = false,
             bool isCountOnly = false,
             bool verbose = false,
@@ -75,6 +81,7 @@
             IsOverwrite = isOverwrite;
             IsReplaceForce = isReplaceForce;
             IsKeepTimestamp = isKeepTimestamp;
+            IdatSize = idatSize;
             IsDryRun = isDryRun;
             IsCountOnly = isCountOnly;
             Verbose = verbose;
