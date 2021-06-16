@@ -168,12 +168,7 @@ namespace RecompressPng
 
             ap.Add('c', "count-only", "Show target PNG files and its size. And show the total count and size");
             ap.Add('d', "dry-run", "Don't save any files, just see the console output.");
-            ap.AddHelp();
-            ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
-            ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
-            ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
-            ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
-            ap.Add('s', "strategies", OptionType.RequiredArgument,
+            ap.Add('f', "filters", OptionType.RequiredArgument,
                 "Filter strategies to try:\n"
                 + indent3 + "0-4: give all scanlines PNG filter type 0-4\n"
                 + indent3 + "m: Minimum sum\n"
@@ -182,8 +177,13 @@ namespace RecompressPng
                 + indent3 + "b: Brute force (experimental)\n"
                 + indent2 + "By default, if this argument is not given, one that is most likely the best for this image is chosen by trying faster compression with each type.\n"
                 + indent2 + "If this argument is used, all given filter types are tried with slow compression and the best result retained.\n"
-                + indent2 + "A good set of filters to try is -s 0me.",
+                + indent2 + "A good set of filters to try is -f 0me.",
                 "0|1|2|3|4|m|e|p|b...");
+            ap.AddHelp();
+            ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
+            ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
+            ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
+            ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
             ap.Add("idat-size", OptionType.RequiredArgument,
                 "Specify chunk data size in IDAT.\n"
@@ -233,9 +233,9 @@ namespace RecompressPng
             zo.AutoFilterStrategy = !ap.GetValue<bool>("no-auto-filter-strategy");
             zo.UseZopfli = !ap.GetValue<bool>("no-use-zopfli");
 
-            if (ap.HasValue('s'))
+            if (ap.HasValue('f'))
             {
-                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('s')));
+                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('f')));
             }
             if (ap.HasValue("keep-chunks"))
             {
