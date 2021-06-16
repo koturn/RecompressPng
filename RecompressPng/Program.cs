@@ -84,6 +84,7 @@ namespace RecompressPng
                     {
                         if (execOptions.IsCountOnly)
                         {
+                            CountPngInVrm(target);
                         }
                         else
                         {
@@ -857,6 +858,35 @@ namespace RecompressPng
                     totalPngFileSize += fileSize;
                 }
             }
+            Console.WriteLine("- - -");
+            Console.WriteLine($"The number of target PNG files: {totalPngFiles}");
+            Console.WriteLine($"Total target PNG file size: {ToMiB(totalPngFileSize):F3} MiB");
+        }
+
+        /// <summary>
+        /// Count PNG files and print its full name in the VRM file.
+        /// </summary>
+        /// <param name="vrmFilePath">Target VRM file.</param>
+        private static void CountPngInVrm(string vrmFilePath)
+        {
+            var (_, glbChunks) = VRMUtil.ParseChunk(vrmFilePath);
+            var (_, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+
+            var totalPngFiles = 0;
+            var totalPngFileSize = 0L;
+            foreach (var imageIndex in imageIndexes)
+            {
+                var data = binaryBuffers[imageIndex.Index];
+                if (imageIndex.MimeType != "image/png" || !HasPngSignature(data))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"[{imageIndex.Index}] {imageIndex.Name}: {ToMiB(data.Length):F3} MiB");
+                totalPngFiles++;
+                totalPngFileSize += data.Length;
+            }
+
             Console.WriteLine("- - -");
             Console.WriteLine($"The number of target PNG files: {totalPngFiles}");
             Console.WriteLine($"Total target PNG file size: {ToMiB(totalPngFileSize):F3} MiB");
