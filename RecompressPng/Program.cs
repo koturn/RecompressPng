@@ -36,6 +36,18 @@ namespace RecompressPng
         /// Chunk type string of IEND chunk.
         /// </summary>
         private const string ChunkTypeIend = "IEND";
+        /// <summary>
+        /// Chunk type string of tEXt chunk.
+        /// </summary>
+        private const string ChunkNameText = "tEXt";
+        /// <summary>
+        /// Chunk type string of tIME chunk.
+        /// </summary>
+        private const string ChunkNameTime = "tIME";
+        /// <summary>
+        /// Predefined keyword of tEXt chunk for time of original image creation.
+        /// </summary>
+        private const string TextChunkKeyCreationTime = "Creation Time";
 
         /// <summary>
         /// Logging instance.
@@ -185,17 +197,28 @@ namespace RecompressPng
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
+            ap.Add("add-text-creation-time",
+                "Add tEXt chunk whose key is \"Creation Time\" and value is last update time of PNG file.\n"
+                + indent2 + "The data time format can be specified with \"--creation-time-format\".");
+            ap.Add("creation-time-format", OptionType.RequiredArgument,
+                "Specify Creation Time format.\n"
+                + indent2 + "Format string is same as DateTime or DateTimeOffset of .NET\n"
+                + indent2 + "\"r\", RFC-1123 section 5.2.14 is recommended in PNG specification.\n"
+                + indent2 + "\"yyyy:MM:dd HH:mm:ss.fff\" can be recognize explorer.exe of Windows.",
+                "FORMAT",
+                "yyyy:MM:dd HH:mm:ss.fff");
+            ap.Add("add-time", "Add tIME chunk whose value is last update time of PNG file in UTC.");
             ap.Add("idat-size", OptionType.RequiredArgument,
                 "Specify chunk data size in IDAT.\n"
-                    + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
-                    + indent2 + "0 or negative value means no splitting",
+                + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
+                + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "keep metadata chunks with these names that would normally be removed,\n"
-                    + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
-                    + indent2 + "Due to adding extra data, this increases the result size.\n"
-                    + indent2 + "By default ZopfliPNG only keeps the following chunks because they are essential:\n"
-                    + indent3 + "IHDR, PLTE, tRNS, IDAT and IEND.",
+                + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
+                + indent2 + "Due to adding extra data, this increases the result size.\n"
+                + indent2 + "By default ZopfliPNG only keeps the following chunks because they are essential:\n"
+                + indent3 + "IHDR, PLTE, tRNS, IDAT and IEND.",
                 "NAME,NAME...");
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
@@ -225,6 +248,20 @@ namespace RecompressPng
                 Console.Error.WriteLine("Proccess first argument: " + targets[0]);
             }
 
+            // Check DateTime format of Creation Time
+            var isAddCt = ap.GetValue<bool>("add-text-creation-time");
+            string ctFormat = null;
+            if (isAddCt)
+            {
+                ctFormat = ap.GetValue("creation-time-format");
+                if (ctFormat == "")
+                {
+                    Console.Error.WriteLine("Date time format for Creation Time is empty string");
+                    Environment.Exit(1);
+                }
+                DateTime.Now.ToString(ctFormat);
+            }
+
             var zo = ZopfliPNGOptions.GetDefault();
             zo.NumIterations = ap.GetValue<int>('i');
             zo.NumIterationsLarge = ap.GetValue<int>('I');
@@ -251,6 +288,8 @@ namespace RecompressPng
                     ap.GetValue<bool>('r'),
                     !ap.GetValue<bool>("no-keep-timestamp"),
                     ap.GetValue<int>("idat-size"),
+                    isAddCt ? ctFormat : "",
+                    ap.GetValue<bool>("add-time"),
                     ap.GetValue<bool>('d'),
                     ap.GetValue<bool>('c'),
                     ap.GetValue<bool>('v'),
@@ -318,6 +357,7 @@ namespace RecompressPng
             Console.WriteLine($"Use Zopfli: {pngOptions.UseZopfli}");
             Console.WriteLine($"Number of Iterations: {pngOptions.NumIterations}");
             Console.WriteLine($"Number of Iterations on Large Images: {pngOptions.NumIterationsLarge}");
+
             Console.WriteLine("- - - Execution Parameters - - -");
             Console.WriteLine($"Number of Threads: {execOptions.NumberOfThreads}");
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
@@ -326,6 +366,13 @@ namespace RecompressPng
             Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
+
+            Console.WriteLine("- - - PNG Modification Parameters - - -");
+            Console.WriteLine($"Size of data part of IDAT chunk: {(execOptions.IdatSize < 0 ? "No Splitting" : $"{execOptions.IdatSize} Bytes")}");
+            var ctFormat = execOptions.TextCreationTimeFormat;
+            var isAddCt = !string.IsNullOrEmpty(ctFormat);
+            Console.WriteLine($"Add Creation Time of tEXt chunk: {isAddCt}{(isAddCt ? $" ({ctFormat})" : "")}");
+            Console.WriteLine($"Add tIME chunk: {execOptions.IsAddTimeChunk}");
             Console.WriteLine("- - -");
         }
 
@@ -417,9 +464,9 @@ namespace RecompressPng
                                 pngOptions,
                                 execOptions.Verbose);
 
-                            if (execOptions.IdatSize > 0)
+                            if (execOptions.IsModifyPng)
                             {
-                                compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                                compressedData = AddAdditionalChunks(compressedData, execOptions, srcEntry.LastWriteTime.DateTime);
                             }
 
                             if (!execOptions.IsDryRun)
@@ -556,6 +603,12 @@ namespace RecompressPng
             var errorImageList = new List<string>();
             var totalSw = Stopwatch.StartNew();
 
+            // Overwrite options.
+            // PNG file in VRM file doesn't have its timestamp.
+            execOptions = (ExecuteOptions)execOptions.Clone();
+            execOptions.TextCreationTimeFormat = null;
+            execOptions.IsAddTimeChunk = false;
+
             Parallel.ForEach(
                 imageIndexes,
                 new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
@@ -580,9 +633,9 @@ namespace RecompressPng
                             pngOptions,
                             execOptions.Verbose);
 
-                        if (execOptions.IdatSize > 0)
+                        if (execOptions.IsModifyPng)
                         {
-                            compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                            compressedData = AddAdditionalChunks(compressedData, execOptions, null);
                         }
 
                         if (!execOptions.IsDryRun && compressedData.Length < data.Length)
@@ -764,9 +817,9 @@ namespace RecompressPng
                         // Take a long time
                         var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
 
-                        if (execOptions.IdatSize > 0)
+                        if (execOptions.IsModifyPng)
                         {
-                            compressedData = SplitIdatChunk(compressedData, execOptions.IdatSize);
+                            compressedData = AddAdditionalChunks(compressedData, execOptions, originalTimestamp);
                         }
 
                         if (!execOptions.IsDryRun)
@@ -1015,13 +1068,17 @@ namespace RecompressPng
         /// Split IDAT chunk into the specified size.
         /// </summary>
         /// <param name="pngData">Source PNG data.</param>
-        /// <param name="idatSize">Size of part of data of the IDAT.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
         /// <returns>New PNG data whose IDAT is splitted into specified size.</returns>
-        private static byte[] SplitIdatChunk(byte[] pngData, int idatSize)
+        private static byte[] AddAdditionalChunks(byte[] pngData, ExecuteOptions execOptions, DateTime? createTime)
         {
             using var ims = new MemoryStream(pngData);
-            using var oms = new MemoryStream(pngData.Length + (pngData.Length / idatSize - 1) * 12);
-            SplitIdat(ims, oms, idatSize);
+            using var oms = new MemoryStream(pngData.Length
+                + (execOptions.IdatSize > 0 ? (pngData.Length / execOptions.IdatSize - 1) * 12 : 0)
+                + (string.IsNullOrEmpty(execOptions.TextCreationTimeFormat) ? 0 : 256)
+                + (execOptions.IsAddTimeChunk ? 19 : 0));
+            AddAdditionalChunks(ims, oms, execOptions, createTime);
             return oms.ToArray();
         }
 
@@ -1030,8 +1087,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="srcPngStream">Source PNG data stream.</param>
         /// <param name="dstPngStream">Destination data stream.</param>
-        /// <param name="idatSize">Size of part of data of the IDAT.</param>
-        private static void SplitIdat(Stream srcPngStream, Stream dstPngStream, int idatSize)
+        /// <param name="execOptions">Options for execution.</param>
+        /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
+        private static void AddAdditionalChunks(Stream srcPngStream, Stream dstPngStream, ExecuteOptions execOptions, DateTime? createTime)
         {
             Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
             if (srcPngStream.Read(pngSignature) < pngSignature.Length)
@@ -1054,10 +1112,12 @@ namespace RecompressPng
 
             using var bw = new BinaryWriter(dstPngStream, Encoding.ASCII, true);
             PngChunk pngChunk;
+            var hasTimeChunk = false;
+            var hasTextCreationTime = false;
             do
             {
                 pngChunk = PngChunk.ReadOneChunk(srcPngStream);
-                if (pngChunk.Type == ChunkTypeIdat)
+                if (pngChunk.Type == ChunkTypeIdat && execOptions.IdatSize > 0)
                 {
                     using var idatMs = new MemoryStream((int)srcPngStream.Length);
                     do
@@ -1067,7 +1127,7 @@ namespace RecompressPng
                     } while (pngChunk.Type == ChunkTypeIdat);
                     idatMs.Position = 0;
 
-                    var idatData = new byte[idatSize];
+                    var idatData = new byte[execOptions.IdatSize];
                     var chunkTypeDataIdat = Encoding.ASCII.GetBytes(ChunkTypeIdat);
                     for (var nRead = idatMs.Read(idatData); nRead != 0; nRead = idatMs.Read(idatData))
                     {
@@ -1079,6 +1139,36 @@ namespace RecompressPng
                         crc32 = Crc32Calculator.Update(idatData, 0, nRead, crc32);
                         crc32 = Crc32Calculator.Finalize(crc32);
                         bw.Write(BinaryPrimitives.ReverseEndianness(crc32));
+                    }
+                }
+
+                if (pngChunk.Type == ChunkNameText) {
+                    // May be thrown ArgumentOutOfRangeException if null character is not found.
+                    var key = Encoding.ASCII.GetString(
+                        pngChunk.Data,
+                        0,
+                        Array.IndexOf(pngChunk.Data, (byte)0, 0, pngChunk.Data.Length));
+                    if (key == TextChunkKeyCreationTime)
+                    {
+                        hasTextCreationTime = true;
+                    }
+                } else if (pngChunk.Type == ChunkNameTime) {
+                    hasTimeChunk = true;
+                } else if (pngChunk.Type == ChunkTypeIend) {
+                    // Insert tEXt and tIME chunks before IEND.
+                    if (createTime.HasValue)
+                    {
+                        if (!hasTextCreationTime && !string.IsNullOrEmpty(execOptions.TextCreationTimeFormat))
+                        {
+                            PngChunk.WriteTextChunk(
+                                dstPngStream,
+                                TextChunkKeyCreationTime,
+                                createTime.Value.ToString(execOptions.TextCreationTimeFormat));
+                        }
+                        if (!hasTimeChunk && execOptions.IsAddTimeChunk)
+                        {
+                            PngChunk.WriteTimeChunk(dstPngStream, createTime.Value);
+                        }
                     }
                 }
                 pngChunk.WriteTo(dstPngStream);

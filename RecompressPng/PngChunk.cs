@@ -70,18 +70,13 @@ namespace RecompressPng
         /// <param name="s">Destination <see cref="Stream"/></param>
         public void WriteTo(Stream s)
         {
-            Span<byte> buf = stackalloc byte[4];
-
             var data = Data;
 
             // Length
-            buf[0] = (byte)(data.Length >> 24);
-            buf[1] = (byte)(data.Length >> 16);
-            buf[2] = (byte)(data.Length >> 8);
-            buf[3] = (byte)data.Length;
-            s.Write(buf);
+            WriteAsBigEndian(s, data.Length);
 
             // Chunk Type
+            Span<byte> buf = stackalloc byte[4];
             Encoding.ASCII.GetBytes(Type, buf);
             s.Write(buf);
 
@@ -89,12 +84,7 @@ namespace RecompressPng
             s.Write(data);
 
             // CRC-32
-            var crc32 = Crc32;
-            buf[0] = (byte)(crc32 >> 24);
-            buf[1] = (byte)(crc32 >> 16);
-            buf[2] = (byte)(crc32 >> 8);
-            buf[3] = (byte)crc32;
-            s.Write(buf);
+            WriteAsBigEndian(s, Crc32);
         }
 
         /// <summary>
@@ -138,6 +128,91 @@ namespace RecompressPng
             }
 
             return new PngChunk(type, data, crc32);
+        }
+
+        /// <summary>
+        /// Write tEXt chunk.
+        /// </summary>
+        /// <param name="s">Destination <see cref="Stream"/> of PNG.</param>
+        /// <param name="key">Key of tEXt chunk.</param>
+        /// <param name="value">Value of tEXt chunk.</param>
+        public static void WriteTextChunk(Stream s, string key, string value)
+        {
+            var keyData = Encoding.ASCII.GetBytes(key);
+            var valueData = Encoding.ASCII.GetBytes(value);
+
+            WriteAsBigEndian(s, keyData.Length + 1 + valueData.Length);
+
+            var textChunkTypeData = Encoding.ASCII.GetBytes("tEXt");
+            s.Write(textChunkTypeData);
+
+            s.Write(keyData);
+            s.WriteByte((byte)0);
+            s.Write(valueData);
+
+            var crc = Crc32Calculator.Update(textChunkTypeData);
+            crc = Crc32Calculator.Update(keyData, crc);
+            crc = Crc32Calculator.Update((byte)0, crc);
+            crc = Crc32Calculator.Update(valueData, crc);
+
+            WriteAsBigEndian(s, Crc32Calculator.Finalize(crc));
+        }
+
+        /// <summary>
+        /// Write tIME chunk.
+        /// </summary>
+        /// <param name="s">Destination <see cref="Stream"/> of PNG.</param>
+        /// <param name="dt"><see cref="DateTime"/> value for tIME chunk.</param>
+        public static void WriteTimeChunk(Stream s, in DateTime dt)
+        {
+            var dtUtc = dt.ToUniversalTime();
+            Span<byte> dtData = stackalloc byte[] {
+                (byte)((dtUtc.Year & 0xff00) >> 8),
+                (byte)(dtUtc.Year & 0xff),
+                (byte)dtUtc.Month,
+                (byte)dtUtc.Day,
+                (byte)dtUtc.Hour,
+                (byte)dtUtc.Minute,
+                (byte)dtUtc.Second,
+            };
+
+            WriteAsBigEndian(s, dtData.Length);
+
+            var textChunkTypeData = Encoding.ASCII.GetBytes("tIME");
+
+            s.Write(textChunkTypeData);
+            s.Write(dtData);
+
+            var crc = Crc32Calculator.Update(textChunkTypeData);
+            crc = Crc32Calculator.Update(dtData, crc);
+            WriteAsBigEndian(s, Crc32Calculator.Finalize(crc));
+        }
+
+        /// <summary>
+        /// Write <see cref="int"/> data as big endian.
+        /// </summary>
+        /// <param name="s">Destination <see cref="Stream"/>.</param>
+        /// <param name="data"><see cref="int"/> data.</param>
+        private static void WriteAsBigEndian(Stream s, int data)
+        {
+            WriteAsBigEndian(s, (uint)data);
+        }
+
+        /// <summary>
+        /// Write <see cref="uint"/> data as big endian.
+        /// </summary>
+        /// <param name="s">Destination <see cref="Stream"/>.</param>
+        /// <param name="data"><see cref="uint"/> data.</param>
+        private static void WriteAsBigEndian(Stream s, uint data)
+        {
+            Span<byte> buf = stackalloc byte[]
+            {
+                (byte)(data >> 24),
+                (byte)(data >> 16),
+                (byte)(data >> 8),
+                (byte)data
+            };
+            s.Write(buf);
         }
 
         /// <summary>
