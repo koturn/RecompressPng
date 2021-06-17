@@ -568,7 +568,7 @@ namespace RecompressPng
             {
                 _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
                 int cnt = 1;
-                foreach (var fullname in diffImageList)
+                foreach (var fullname in errorImageList)
                 {
                     Console.WriteLine($"Error image [{cnt}]: {fullname}");
                     cnt++;
@@ -759,7 +759,7 @@ namespace RecompressPng
             {
                 _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
                 int cnt = 1;
-                foreach (var fullname in diffImageList)
+                foreach (var fullname in errorImageList)
                 {
                     Console.WriteLine($"Error image [{cnt}]: {fullname}");
                     cnt++;
@@ -916,7 +916,7 @@ namespace RecompressPng
             {
                 _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
                 int cnt = 1;
-                foreach (var relPath in diffImageList)
+                foreach (var relPath in errorImageList)
                 {
                     Console.WriteLine($"Error image [{cnt}]: {relPath}");
                     cnt++;
