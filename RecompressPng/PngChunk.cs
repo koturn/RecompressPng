@@ -45,7 +45,7 @@ namespace RecompressPng
 
         /// <summary>
         /// <para>Initialize <see cref="Type"/> and <see cref="Data"/> with specified value.</para>
-        /// <para><see cref="Crc32"/> is initialized with comnputed CRC-32 value from <paramref name="type"/> and <see cref="data"/>.</para>
+        /// <para><see cref="Crc32"/> is initialized with comnputed CRC-32 value from <paramref name="type"/> and <paramref name="data"/>.</para>
         /// </summary>
         /// <param name="type">Chunk type string</param>
         /// <param name="data">Chunk data.</param>

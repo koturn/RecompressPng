@@ -96,7 +96,8 @@ namespace RecompressPng
         /// <para>Update intermidiate CRC-32 value.</para>
         /// <para>Use default value of <paramref name="crc"/> at first time.</para>
         /// </summary>
-        /// <param name="buf">A value of <see cref="byte"/>.</param>
+        /// <param name="x">A value of <see cref="byte"/>.</param>
+        /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
         public static uint Update(byte x, uint crc = 0xffffffff)
         {
