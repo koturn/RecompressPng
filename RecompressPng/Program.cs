@@ -513,7 +513,7 @@ namespace RecompressPng
                                     execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
                             }
 
-                            var logLevel = LogLevel.Info;
+                            var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
@@ -674,7 +674,7 @@ namespace RecompressPng
                             binaryBuffers[imageIndex.Index] = compressedData;
                         }
 
-                        var logLevel = LogLevel.Info;
+                        var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
@@ -872,7 +872,7 @@ namespace RecompressPng
                         Interlocked.Add(ref srcTotalFileSize, data.Length);
                         Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
 
-                        var logLevel = LogLevel.Info;
+                        var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
