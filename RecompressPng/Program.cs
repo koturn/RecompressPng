@@ -29,6 +29,40 @@ namespace RecompressPng
     static class Program
     {
         /// <summary>
+        /// Result of image comparison methods,
+        /// <see cref="CompareImage(byte[], byte[])"/>,
+        /// <see cref="CompareImage(byte[], long, byte[], long)"/>
+        /// and <see cref="CompareImage(Bitmap, Bitmap)"/>.
+        /// </summary>
+        private enum CompareResult
+        {
+            /// <summary>
+            /// Two images are same
+            /// </summary>
+            Same,
+            /// <summary>
+            /// Two images have different widths.
+            /// </summary>
+            DifferentWidth,
+            /// <summary>
+            /// Two images have different heights.
+            /// </summary>
+            DifferentHeight,
+            /// <summary>
+            /// Two images have different pixel formats.
+            /// </summary>
+            DifferentPixelFormat,
+            /// <summary>
+            /// Two images have different strides.
+            /// </summary>
+            DifferentStride,
+            /// <summary>
+            /// data of the two images are different.
+            /// </summary>
+            DifferentImageData
+        };
+
+        /// <summary>
         /// Chunk type string of IDAT chunk.
         /// </summary>
         private const string ChunkTypeIdat = "IDAT";
@@ -483,13 +517,10 @@ namespace RecompressPng
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
-                                if (CompareImage(data, data.LongLength, compressedData, compressedData.LongLength))
+                                var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                                verifyResultMsg = $" ({GetCompareResultMessage(result)})";
+                                if (result != CompareResult.Same)
                                 {
-                                    verifyResultMsg = " (same image)";
-                                }
-                                else
-                                {
-                                    verifyResultMsg = " (different image)";
                                     logLevel = LogLevel.Warn;
                                     lock (((ICollection)diffImageList).SyncRoot)
                                     {
@@ -647,13 +678,10 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            if (CompareImage(data, data.LongLength, compressedData, compressedData.LongLength))
+                            var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
+                            if (result != CompareResult.Same)
                             {
-                                verifyResultMsg = " (same image)";
-                            }
-                            else
-                            {
-                                verifyResultMsg = " (different image)";
                                 logLevel = LogLevel.Warn;
                                 lock (((ICollection)diffImageList).SyncRoot)
                                 {
@@ -848,14 +876,11 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            if (CompareImage(data, compressedData))
-                            {
-                                verifyResultMsg = " (same image)";
-                            }
-                            else
+                            var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
+                            if (result != CompareResult.Same)
                             {
                                 logLevel = LogLevel.Warn;
-                                verifyResultMsg = " (different image)";
                                 lock (((ICollection)diffImageList).SyncRoot)
                                 {
                                     diffImageList.Add(srcRelPath);
@@ -1268,11 +1293,17 @@ namespace RecompressPng
         /// <param name="imgData1">First image data.</param>
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        private static bool CompareImage(byte[] imgData1, byte[] imgData2)
+        private static CompareResult CompareImage(byte[] imgData1, byte[] imgData2)
         {
             using var bmp1 = CreateBitmapFromByteArray(imgData1);
             using var bmp2 = CreateBitmapFromByteArray(imgData2);
-            return CompareImage(bmp1, bmp2) || _memoryComparator.CompareMemory(imgData1, imgData2);
+
+            var result = CompareImage(bmp1, bmp2);
+            if (result == CompareResult.Same)
+            {
+                return result;
+            }
+            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
         }
 
         /// <summary>
@@ -1283,12 +1314,18 @@ namespace RecompressPng
         /// <param name="imgData2">Second image data.</param>
         /// <param name="imgDataLength2">Byte length of <paramref name="imgData2"/>.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        private static bool CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
+        private static CompareResult CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
         {
             using var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1);
             using var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2);
-            return CompareImage(bmp1, bmp2)
-                || (imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length));
+
+            var result = CompareImage(bmp1, bmp2);
+            if (result == CompareResult.Same)
+            {
+                return result;
+            }
+            return imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length)
+                ? CompareResult.Same : CompareResult.DifferentImageData;
         }
 
         /// <summary>
@@ -1297,19 +1334,19 @@ namespace RecompressPng
         /// <param name="img1">First image data.</param>
         /// <param name="img2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        private static bool CompareImage(Bitmap img1, Bitmap img2)
+        private static CompareResult CompareImage(Bitmap img1, Bitmap img2)
         {
             if (img1.Width != img2.Width)
             {
-                return false;
+                return CompareResult.DifferentWidth;
             }
             if (img1.Height != img2.Height)
             {
-                return false;
+                return CompareResult.DifferentHeight;
             }
             if (img1.PixelFormat != img2.PixelFormat)
             {
-                return false;
+                return CompareResult.DifferentPixelFormat;
             }
 
             var bd1 = img1.LockBits(
@@ -1323,7 +1360,7 @@ namespace RecompressPng
 
             if (bd1.Stride != bd2.Stride)
             {
-                return false;
+                return CompareResult.DifferentStride;
             }
 
             var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
@@ -1331,7 +1368,26 @@ namespace RecompressPng
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
-            return isSameImageData;
+            return isSameImageData ? CompareResult.Same : CompareResult.DifferentImageData;
+        }
+
+        /// <summary>
+        /// Get message of <see cref="CompareResult"/>.
+        /// </summary>
+        /// <param name="result">A value of <see cref="CompareResult"/></param>
+        /// <returns>Message corresponding to <paramref name="result"/>.</returns>
+        private static string GetCompareResultMessage(CompareResult result)
+        {
+            return result switch
+            {
+                CompareResult.Same => "same image",
+                CompareResult.DifferentWidth => "different width",
+                CompareResult.DifferentHeight => "different height",
+                CompareResult.DifferentPixelFormat => "different pixel format",
+                CompareResult.DifferentStride => "different stride",
+                CompareResult.DifferentImageData => "different image data",
+                _ => "unknown result",
+            };
         }
 
         /// <summary>
