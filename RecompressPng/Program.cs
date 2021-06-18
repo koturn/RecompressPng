@@ -26,7 +26,7 @@ namespace RecompressPng
     /// <summary>
     /// PNG re-compression using "zopfli" algorithm.
     /// </summary>
-    class Program
+    static class Program
     {
         /// <summary>
         /// Chunk type string of IDAT chunk.
@@ -692,8 +692,9 @@ namespace RecompressPng
                 for (int i = 0, cnt = binaryBuffers.Count; i < cnt; i++)
                 {
                     var buffer = binaryBuffers[i];
-                    gltfJson["bufferViews"][i]["byteOffset"] = nOffset;
-                    gltfJson["bufferViews"][i]["byteLength"] = buffer.Length;
+                    var bufferView = gltfJson["bufferViews"][i];
+                    bufferView["byteOffset"] = nOffset;
+                    bufferView["byteLength"] = buffer.Length;
                     nOffset += buffer.Length;
                 }
 
@@ -1065,20 +1066,33 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Split IDAT chunk into the specified size.
+        /// Split IDAT chunk or add tEXt chunk whose key is "Creation Time".
+        /// </summary>
+        /// <param name="pngData">Source PNG data.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        /// <returns>Modified PNG data.</returns>
+        private static byte[] AddAdditionalChunks(byte[] pngData, ExecuteOptions execOptions)
+        {
+            return AddAdditionalChunks(pngData, execOptions, null);
+        }
+
+        /// <summary>
+        /// Split IDAT chunk or add tEXt chunk whose key is "Creation Time" or add tIME chunk.
         /// </summary>
         /// <param name="pngData">Source PNG data.</param>
         /// <param name="execOptions">Options for execution.</param>
         /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
-        /// <returns>New PNG data whose IDAT is splitted into specified size.</returns>
+        /// <returns>Modified PNG data.</returns>
         private static byte[] AddAdditionalChunks(byte[] pngData, ExecuteOptions execOptions, DateTime? createTime)
         {
-            using var ims = new MemoryStream(pngData);
             using var oms = new MemoryStream(pngData.Length
                 + (execOptions.IdatSize > 0 ? (pngData.Length / execOptions.IdatSize - 1) * 12 : 0)
                 + (string.IsNullOrEmpty(execOptions.TextCreationTimeFormat) ? 0 : 256)
                 + (execOptions.IsAddTimeChunk ? 19 : 0));
-            AddAdditionalChunks(ims, oms, execOptions, createTime);
+            using (var ims = new MemoryStream(pngData))
+            {
+                AddAdditionalChunks(ims, oms, execOptions, createTime);
+            }
             return oms.ToArray();
         }
 
