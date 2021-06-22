@@ -454,7 +454,7 @@ namespace RecompressPng
                             srcEntry.FullName,
                             ReadAllBytes(srcEntry, srcLock),
                             dstLock,
-                            execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
+                            execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
                         _logger.Info(
                             "[{0}] Copy {1} done: {2:F3} seconds",
                             procIndex,
@@ -511,7 +511,7 @@ namespace RecompressPng
                                 CreateEntryAndWriteData(
                                     dstArchive,
                                     srcEntry.FullName,
-                                    (pngDataSpan.Length < data.Length || execOptions.IsReplaceForce) ? pngDataSpan : data.AsSpan(),
+                                    pngDataSpan,
                                     dstLock,
                                     execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
                             }
@@ -680,7 +680,7 @@ namespace RecompressPng
                             binaryBuffers[imageIndex.Index] = pngDataSpan.ToArray();
                         }
 
-                        var logLevel = (long)compressedData.ByteLength < data.LongLength ? LogLevel.Info : LogLevel.Warn;
+                        var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
@@ -855,9 +855,8 @@ namespace RecompressPng
                             pngOptions,
                             execOptions.Verbose);
 
-                        var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                            ? CreateSpan(compressedData)
-                            : data.AsSpan();
+                        var isReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
+                        var pngDataSpan = isReplace ? CreateSpan(compressedData) : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
                             pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, originalTimestamp);
@@ -866,7 +865,7 @@ namespace RecompressPng
                         if (!execOptions.IsDryRun)
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
-                            if (pngDataSpan.Length <= data.Length || execOptions.IsReplaceForce)
+                            if (isReplace || execOptions.IsModifyPng)
                             {
                                 using var fs = new FileStream(dstFilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
                                 fs.Write(pngDataSpan);
@@ -1135,7 +1134,7 @@ namespace RecompressPng
                     AddAdditionalChunks(ims, oms, execOptions, createTime);
                 }
             }
-            return oms.ToArray();
+            return oms.GetBuffer().AsSpan(0, (int)oms.Length);
         }
 
         /// <summary>
