@@ -1182,7 +1182,7 @@ namespace RecompressPng
                     } while (pngChunk.Type == ChunkTypeIdat);
                     idatMs.Position = 0;
 
-                    var idatData = new byte[execOptions.IdatSize];
+                    var idatData = new byte[Math.Min(execOptions.IdatSize, idatMs.Length)];
                     var chunkTypeDataIdat = Encoding.ASCII.GetBytes(ChunkTypeIdat);
                     for (var nRead = idatMs.Read(idatData); nRead != 0; nRead = idatMs.Read(idatData))
                     {
