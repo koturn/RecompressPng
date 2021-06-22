@@ -493,14 +493,17 @@ namespace RecompressPng
                             }
 
                             // Take a long time
-                            var compressedData = ZopfliPng.OptimizePng(
+                            using var compressedData = ZopfliPng.OptimizePngUnmanaged(
                                 data,
                                 pngOptions,
                                 execOptions.Verbose);
 
+                            var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
+                                ? CreateSpan(compressedData)
+                                : data.AsSpan();
                             if (execOptions.IsModifyPng)
                             {
-                                compressedData = AddAdditionalChunks(compressedData, execOptions, srcEntry.LastWriteTime.DateTime);
+                                pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
                             }
 
                             if (!execOptions.IsDryRun)
@@ -508,16 +511,16 @@ namespace RecompressPng
                                 CreateEntryAndWriteData(
                                     dstArchive,
                                     srcEntry.FullName,
-                                    (compressedData.LongLength < data.LongLength || execOptions.IsReplaceForce) ? compressedData : data,
+                                    (pngDataSpan.Length < data.Length || execOptions.IsReplaceForce) ? pngDataSpan : data.AsSpan(),
                                     dstLock,
-                                    execOptions.IsKeepTimestamp ? (DateTimeOffset?)srcEntry.LastWriteTime : null);
+                                    execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
                             }
 
-                            var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
+                            var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
-                                var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                                var result = CompareImage(data, pngDataSpan);
                                 verifyResultMsg = $" ({GetCompareResultMessage(result)})";
                                 if (result != CompareResult.Same)
                                 {
@@ -535,9 +538,9 @@ namespace RecompressPng
                                 srcEntry.FullName,
                                 sw.ElapsedMilliseconds / 1000.0,
                                 ToMiB(data.LongLength),
-                                ToMiB(compressedData.LongLength),
+                                ToMiB(pngDataSpan.Length),
                                 verifyResultMsg,
-                                CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
+                                CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
                         }
                         catch (Exception ex)
                         {
@@ -659,26 +662,29 @@ namespace RecompressPng
                     try
                     {
                         // Take a long time
-                        var compressedData = ZopfliPng.OptimizePng(
+                        using var compressedData = ZopfliPng.OptimizePngUnmanaged(
                             data,
                             pngOptions,
                             execOptions.Verbose);
 
+                        var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
+                            ? CreateSpan(compressedData)
+                            : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
-                            compressedData = AddAdditionalChunks(compressedData, execOptions, null);
+                            pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions);
                         }
 
-                        if (!execOptions.IsDryRun && compressedData.Length < data.Length)
+                        if (!execOptions.IsDryRun)
                         {
-                            binaryBuffers[imageIndex.Index] = compressedData;
+                            binaryBuffers[imageIndex.Index] = pngDataSpan.ToArray();
                         }
 
-                        var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
+                        var logLevel = (long)compressedData.ByteLength < data.LongLength ? LogLevel.Info : LogLevel.Warn;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                            var result = CompareImage(data, pngDataSpan);
                             verifyResultMsg = $" ({GetCompareResultMessage(result)})";
                             if (result != CompareResult.Same)
                             {
@@ -696,9 +702,9 @@ namespace RecompressPng
                             displayName,
                             sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
-                            ToMiB(compressedData.LongLength),
+                            ToMiB(pngDataSpan.Length),
                             verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
                     }
                     catch (Exception ex)
                     {
@@ -844,19 +850,26 @@ namespace RecompressPng
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                         // Take a long time
-                        var compressedData = ZopfliPng.OptimizePng(data, pngOptions, execOptions.Verbose);
+                        using var compressedData = ZopfliPng.OptimizePngUnmanaged(
+                            data,
+                            pngOptions,
+                            execOptions.Verbose);
 
+                        var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
+                            ? CreateSpan(compressedData)
+                            : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
-                            compressedData = AddAdditionalChunks(compressedData, execOptions, originalTimestamp);
+                            pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, originalTimestamp);
                         }
 
                         if (!execOptions.IsDryRun)
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
-                            if (compressedData.Length <= data.Length || execOptions.IsReplaceForce)
+                            if (pngDataSpan.Length <= data.Length || execOptions.IsReplaceForce)
                             {
-                                File.WriteAllBytes(dstFilePath, compressedData);
+                                using var fs = new FileStream(dstFilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+                                fs.Write(pngDataSpan);
                             }
                             else
                             {
@@ -870,13 +883,13 @@ namespace RecompressPng
                         }
 
                         Interlocked.Add(ref srcTotalFileSize, data.Length);
-                        Interlocked.Add(ref dstTotalFileSize, compressedData.Length);
+                        Interlocked.Add(ref dstTotalFileSize, pngDataSpan.Length);
 
-                        var logLevel = compressedData.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
+                        var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var result = CompareImage(data, data.LongLength, compressedData, compressedData.LongLength);
+                            var result = CompareImage(data, pngDataSpan);
                             verifyResultMsg = $" ({GetCompareResultMessage(result)})";
                             if (result != CompareResult.Same)
                             {
@@ -894,9 +907,9 @@ namespace RecompressPng
                             srcRelPath,
                             sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
-                            ToMiB(compressedData.LongLength),
+                            ToMiB(pngDataSpan.Length),
                             verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, compressedData.LongLength) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
                     }
                     catch (Exception ex)
                     {
@@ -1096,7 +1109,7 @@ namespace RecompressPng
         /// <param name="pngData">Source PNG data.</param>
         /// <param name="execOptions">Options for execution.</param>
         /// <returns>Modified PNG data.</returns>
-        private static byte[] AddAdditionalChunks(byte[] pngData, ExecuteOptions execOptions)
+        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions)
         {
             return AddAdditionalChunks(pngData, execOptions, null);
         }
@@ -1108,15 +1121,19 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
         /// <returns>Modified PNG data.</returns>
-        private static byte[] AddAdditionalChunks(byte[] pngData, ExecuteOptions execOptions, DateTime? createTime)
+        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions, DateTime? createTime)
         {
             using var oms = new MemoryStream(pngData.Length
                 + (execOptions.IdatSize > 0 ? (pngData.Length / execOptions.IdatSize - 1) * 12 : 0)
                 + (string.IsNullOrEmpty(execOptions.TextCreationTimeFormat) ? 0 : 256)
                 + (execOptions.IsAddTimeChunk ? 19 : 0));
-            using (var ims = new MemoryStream(pngData))
+            unsafe
             {
-                AddAdditionalChunks(ims, oms, execOptions, createTime);
+                fixed (byte* p = pngData)
+                {
+                    using var ims = new UnmanagedMemoryStream(p, pngData.Length);
+                    AddAdditionalChunks(ims, oms, execOptions, createTime);
+                }
             }
             return oms.ToArray();
         }
@@ -1228,6 +1245,16 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Create <see cref="Span{T}"/> from <see cref="SafeBuffer"/>.
+        /// </summary>
+        /// <param name="sb">An instance of <see cref="SafeBuffer"/>.</param>
+        /// <returns><see cref="Span{T}"/> of <paramref name="sb"/>.</returns>
+        private static unsafe Span<byte> CreateSpan(SafeBuffer sb)
+        {
+            return new Span<byte>((void*)sb.DangerousGetHandle(), (int)sb.ByteLength);
+        }
+
+        /// <summary>
         /// Read all data from <see cref="ZipArchiveEntry"/>.
         /// </summary>
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
@@ -1252,7 +1279,7 @@ namespace RecompressPng
         /// <param name="data">The data to write.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <param name="timestamp">Timestamp for new entry.</param>
-        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, byte[] data, object lockObj, DateTimeOffset? timestamp = null)
+        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, Span<byte> data, object lockObj, DateTimeOffset? timestamp = null)
         {
             lock (lockObj)
             {
@@ -1262,7 +1289,7 @@ namespace RecompressPng
                     dstEntry.LastWriteTime = timestamp.Value;
                 }
                 using var dstZs = dstEntry.Open();
-                dstZs.Write(data, 0, data.Length);
+                dstZs.Write(data);
             }
         }
 
@@ -1326,6 +1353,25 @@ namespace RecompressPng
             }
             return imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length)
                 ? CompareResult.Same : CompareResult.DifferentImageData;
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
+        /// <param name="imgData1">First image data.</param>
+        /// <param name="imgData2">Second image data.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
+        {
+            using var bmp1 = CreateBitmapFromByteArray(imgData1);
+            using var bmp2 = CreateBitmapFromSpan(imgData2);
+
+            var result = CompareImage(bmp1, bmp2);
+            if (result == CompareResult.Same)
+            {
+                return result;
+            }
+            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
         }
 
         /// <summary>
@@ -1409,6 +1455,42 @@ namespace RecompressPng
         private static Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
         {
             using var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false);
+            return (Bitmap)Image.FromStream(ms);
+        }
+
+        /// <summary>
+        /// Convert <see cref="Bitmap"/> instance from image data.
+        /// </summary>
+        /// <param name="imgData">Image data.</param>
+        /// <returns><see cref="Bitmap"/> instance.</returns>
+        private static unsafe Bitmap CreateBitmapFromSpan(Span<byte> imgData)
+        {
+            fixed (byte* p = imgData)
+            {
+                using var ms = new UnmanagedMemoryStream(p, imgData.Length);
+                return (Bitmap)Image.FromStream(ms);
+            }
+        }
+
+        /// <summary>
+        /// Convert <see cref="Bitmap"/> instance from image data.
+        /// </summary>
+        /// <param name="imgData">Image data.</param>
+        /// <returns><see cref="Bitmap"/> instance.</returns>
+        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData)
+        {
+            return CreateBitmapFromSafeBuffer(imgData, (long)imgData.ByteLength);
+        }
+
+        /// <summary>
+        /// Convert <see cref="Bitmap"/> instance from image data.
+        /// </summary>
+        /// <param name="imgData">Image data.</param>
+        /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
+        /// <returns><see cref="Bitmap"/> instance.</returns>
+        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData, long imgDataLength)
+        {
+            using var ms = new UnmanagedMemoryStream(imgData, 0, (int)imgDataLength);
             return (Bitmap)Image.FromStream(ms);
         }
 

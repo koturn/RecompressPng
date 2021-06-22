@@ -154,6 +154,30 @@ namespace RecompressPng
         /// <summary>
         /// Compare two byte data.
         /// </summary>
+        /// <param name="data1">First byte data span.</param>
+        /// <param name="data2">Second byte data span.</param>
+        /// <returns>True if two byte data is same, otherwise false.</returns>
+        public bool CompareMemory(Span<byte> data1, Span<byte> data2)
+        {
+            if (data1.Length != data2.Length)
+            {
+                return false;
+            }
+
+            unsafe
+            {
+                fixed (byte* pData1 = data1)
+                fixed (byte* pData2 = data2)
+                {
+                    return CompareMemory((IntPtr)pData1, (IntPtr)pData2, data1.Length);
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// Compare two byte data.
+        /// </summary>
         /// <param name="pData1">First pointer to byte data array.</param>
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
