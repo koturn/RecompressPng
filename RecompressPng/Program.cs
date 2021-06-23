@@ -92,6 +92,10 @@ namespace RecompressPng
         /// </summary>
         private static readonly byte[] PngSignature;
         /// <summary>
+        /// Magic number byte sequence of glTF file.
+        /// </summary>
+        private static readonly byte[] GltfMagicBytes;
+        /// <summary>
         /// Memory comparator.
         /// </summary>
         private static MemoryComparator _memoryComparator;
@@ -108,6 +112,7 @@ namespace RecompressPng
                     Environment.Is64BitProcess ? "x64" : "x86"));
             _logger = LogManager.GetCurrentClassLogger();
             PngSignature = new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a };
+            GltfMagicBytes = new byte[] { (byte)'g', (byte)'l', (byte)'T', (byte)'F' };
         }
 
         /// <summary>
@@ -136,7 +141,7 @@ namespace RecompressPng
                             RecompressPngInZipArchive(target, null, pngOptions, execOptions);
                         }
                     }
-                    else if (target.EndsWith(".vrm", StringComparison.OrdinalIgnoreCase) || target.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                    else if (IsGltfFile(target))
                     {
                         if (execOptions.IsCountOnly)
                         {
@@ -1094,6 +1099,48 @@ namespace RecompressPng
             for (int i = 0; i < PngSignature.Length; i++)
             {
                 if (data[i] != PngSignature[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// <para>Identify glTF file or not.</para>
+        /// <para>Just determine if the first four bytes are 'g', 'l', 'T' and 'F'.</para>
+        /// </summary>
+        /// <param name="gltfFilePath">Target glTF file path,</param>
+        /// <returns>True if specified file is a glTF file, otherwise false.</returns>
+        private static bool IsGltfFile(string gltfFilePath)
+        {
+            Span<byte> buffer = stackalloc byte[4];
+            using (var fs = new FileStream(gltfFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (fs.Read(buffer) < buffer.Length)
+                {
+                    return false;
+                }
+            }
+            return HasGltfMagic(buffer);
+        }
+
+        /// <summary>
+        /// Identify the specified binary data has a glTF magic number or not.
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
+        private static bool HasGltfMagic(Span<byte> data)
+        {
+            if (data.Length < GltfMagicBytes.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < GltfMagicBytes.Length; i++)
+            {
+                if (data[i] != GltfMagicBytes[i])
                 {
                     return false;
                 }
