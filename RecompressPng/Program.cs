@@ -421,7 +421,7 @@ namespace RecompressPng
         {
             dstZipFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcZipFilePath),
-                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
+                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             if (File.Exists(dstZipFilePath))
             {
@@ -621,7 +621,7 @@ namespace RecompressPng
         {
             dstVrmFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcVrmFilePath),
-                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli.vrm");
+                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
 
             if (File.Exists(dstVrmFilePath))
             {
