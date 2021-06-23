@@ -1043,10 +1043,10 @@ namespace RecompressPng
         /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
         private static bool IsZipFile(string zipFilePath)
         {
-            var buffer = new byte[4];
+            Span<byte> buffer = stackalloc byte[4];
             using (var fs = new FileStream(zipFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+                if (fs.Read(buffer) < buffer.Length)
                 {
                     return false;
                 }
@@ -1060,7 +1060,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a zip signature, otherwise false.</returns>
-        private static bool HasZipSignature(byte[] data)
+        private static bool HasZipSignature(Span<byte> data)
         {
             return data.Length >= 4
                 && data[0] == 'P'
