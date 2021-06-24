@@ -166,7 +166,7 @@ namespace RecompressPng
                     }
                     else
                     {
-                        _logger.Fatal("Specified file is not zip archive: ", target);
+                        _logger.Fatal("Specified file is neither zip archive nor glTF file: {0}", target);
                         return 1;
                     }
                 }
