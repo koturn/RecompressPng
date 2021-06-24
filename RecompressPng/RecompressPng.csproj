@@ -11,6 +11,7 @@
     <PackageProjectUrl>https://github.com/koturn/RecompressPng</PackageProjectUrl>
     <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <Version>1.1.0.0</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">

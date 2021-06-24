@@ -30,9 +30,7 @@ namespace RecompressPng
     static class Program
     {
         /// <summary>
-        /// Result of image comparison methods,
-        /// <see cref="CompareImage(byte[], byte[])"/>,
-        /// <see cref="CompareImage(byte[], long, byte[], long)"/>
+        /// Result of image comparison methods, <see cref="CompareImage(byte[], Span{byte})"/>
         /// and <see cref="CompareImage(Bitmap, Bitmap)"/>.
         /// </summary>
         private enum CompareResult
@@ -1387,8 +1385,8 @@ namespace RecompressPng
                 return CompareResult.Same;
             }
 
-            using var bmp1 = CreateBitmapFromByteArray(imgData1);
-            using var bmp2 = CreateBitmapFromSpan(imgData2);
+            using var bmp1 = CreateBitmap(imgData1);
+            using var bmp2 = CreateBitmap(imgData2);
 
             return CompareImage(bmp1, bmp2);
         }
@@ -1497,9 +1495,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromByteArray(byte[] imgData)
+        private static Bitmap CreateBitmap(byte[] imgData)
         {
-            return CreateBitmapFromByteArray(imgData, imgData.LongLength);
+            return CreateBitmap(imgData, imgData.LongLength);
         }
 
         /// <summary>
@@ -1508,7 +1506,7 @@ namespace RecompressPng
         /// <param name="imgData">Image data.</param>
         /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
+        private static Bitmap CreateBitmap(byte[] imgData, long imgDataLength)
         {
             using var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false);
             return (Bitmap)Image.FromStream(ms);
@@ -1519,7 +1517,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static unsafe Bitmap CreateBitmapFromSpan(Span<byte> imgData)
+        private static unsafe Bitmap CreateBitmap(Span<byte> imgData)
         {
             fixed (byte* p = imgData)
             {
@@ -1533,9 +1531,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData)
+        private static Bitmap CreateBitmap(SafeBuffer imgData)
         {
-            return CreateBitmapFromSafeBuffer(imgData, (long)imgData.ByteLength);
+            return CreateBitmap(imgData, (long)imgData.ByteLength);
         }
 
         /// <summary>
@@ -1544,7 +1542,7 @@ namespace RecompressPng
         /// <param name="imgData">Image data.</param>
         /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData, long imgDataLength)
+        private static Bitmap CreateBitmap(SafeBuffer imgData, long imgDataLength)
         {
             using var ms = new UnmanagedMemoryStream(imgData, 0, (int)imgDataLength);
             return (Bitmap)Image.FromStream(ms);
