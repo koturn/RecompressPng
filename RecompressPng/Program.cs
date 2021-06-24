@@ -455,15 +455,16 @@ namespace RecompressPng
                 var srcLock = new object();
                 var dstLock = execOptions.IsDryRun ? null : new object();
 
-                void CopyZipEntry(ZipArchiveEntry srcEntry, int procIndex, Stopwatch sw)
+                void CopyZipEntry(ZipArchiveEntry srcEntry)
                 {
                     if (execOptions.IsDryRun)
                     {
                         return;
                     }
-                    _logger.Info("[{0}] Copy {1} ...", procIndex, srcEntry.FullName);
+                    _logger.Info("Copy {0} ...", srcEntry.FullName);
                     try
                     {
+                        var sw = Stopwatch.StartNew();
                         CreateEntryAndWriteData(
                             dstArchive,
                             srcEntry.FullName,
@@ -471,14 +472,13 @@ namespace RecompressPng
                             dstLock,
                             execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
                         _logger.Info(
-                            "[{0}] Copy {1} done: {2:F3} seconds",
-                            procIndex,
+                            "Copy {0} done: {1:F3} seconds",
                             srcEntry.FullName,
                             sw.ElapsedMilliseconds / 1000.0);
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, "[{0}] Copy {1} failed: ", procIndex, srcEntry.FullName);
+                        _logger.Error(ex, "Copy {0} failed: ", srcEntry.FullName);
                     }
                 }
 
@@ -487,15 +487,14 @@ namespace RecompressPng
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
-                        var sw = Stopwatch.StartNew();
-                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
-
                         if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         {
-                            CopyZipEntry(srcEntry, procIndex, sw);
+                            CopyZipEntry(srcEntry);
                             return;
                         }
 
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var sw = Stopwatch.StartNew();
                         _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
@@ -503,7 +502,7 @@ namespace RecompressPng
                             if (!HasPngSignature(data))
                             {
                                 _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
-                                CopyZipEntry(srcEntry, procIndex, sw);
+                                CopyZipEntry(srcEntry);
                                 return;
                             }
 
@@ -564,7 +563,7 @@ namespace RecompressPng
                                 "[{0}] Compress {1} failed:",
                                 procIndex,
                                 srcEntry.FullName);
-                            CopyZipEntry(srcEntry, procIndex, sw);
+                            CopyZipEntry(srcEntry);
                             lock (((ICollection)errorImageList).SyncRoot)
                             {
                                 errorImageList.Add(srcEntry.FullName);
