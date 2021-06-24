@@ -52,7 +52,7 @@ namespace RecompressPng
             /// <summary>
             /// Two images have different pixel formats.
             /// </summary>
-            DifferentPixelFormat,
+            SameButDifferentPixelFormat,
             /// <summary>
             /// Two images have different strides.
             /// </summary>
@@ -1378,58 +1378,19 @@ namespace RecompressPng
         /// <param name="imgData1">First image data.</param>
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(byte[] imgData1, byte[] imgData2)
-        {
-            using var bmp1 = CreateBitmapFromByteArray(imgData1);
-            using var bmp2 = CreateBitmapFromByteArray(imgData2);
-
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
-            {
-                return result;
-            }
-            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgDataLength1">Byte length of <paramref name="imgData1"/>.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <param name="imgDataLength2">Byte length of <paramref name="imgData2"/>.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
-        {
-            using var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1);
-            using var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2);
-
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
-            {
-                return result;
-            }
-            return imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length)
-                ? CompareResult.Same : CompareResult.DifferentImageData;
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
         private static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
         {
+            // The only way the two PNG data will be the same is
+            // if they are recompressed with the same parameters.
+            if (_memoryComparator.CompareMemory(imgData1, imgData2))
+            {
+                return CompareResult.Same;
+            }
+
             using var bmp1 = CreateBitmapFromByteArray(imgData1);
             using var bmp2 = CreateBitmapFromSpan(imgData2);
 
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
-            {
-                return result;
-            }
-            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
+            return CompareImage(bmp1, bmp2);
         }
 
         /// <summary>
@@ -1450,7 +1411,11 @@ namespace RecompressPng
             }
             if (img1.PixelFormat != img2.PixelFormat)
             {
-                return CompareResult.DifferentPixelFormat;
+                return CompareImageByPixel(img1, img2) ? CompareResult.SameButDifferentPixelFormat : CompareResult.DifferentImageData;
+            }
+            if ((img1.PixelFormat & PixelFormat.Indexed) != 0)
+            {
+                return CompareImageByPixel(img1, img2) ? CompareResult.Same : CompareResult.DifferentImageData;
             }
 
             var bd1 = img1.LockBits(
@@ -1467,12 +1432,45 @@ namespace RecompressPng
                 return CompareResult.DifferentStride;
             }
 
-            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
+            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Height * bd1.Stride);
 
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
             return isSameImageData ? CompareResult.Same : CompareResult.DifferentImageData;
+        }
+
+        /// <summary>
+        /// Compare the two images pixel by pixel.
+        /// </summary>
+        /// <param name="img1">First image data.</param>
+        /// <param name="img2">Second image data.</param>
+        /// <returns><c>true</c> if two images are same, otherwise <c>false</c>.</returns>
+        private static bool CompareImageByPixel(Bitmap img1, Bitmap img2)
+        {
+            if (img1.Width != img2.Width)
+            {
+                return false;
+            }
+            if (img1.Height != img2.Height)
+            {
+                return false;
+            }
+
+            var height = img1.Height;
+            var width = img1.Width;
+            for (int i = 0; i < height; i++)
+            {
+                for (int j = 0; j < width; j++)
+                {
+                    if (img1.GetPixel(j, i) != img2.GetPixel(j, i))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -1487,7 +1485,7 @@ namespace RecompressPng
                 CompareResult.Same => "same image",
                 CompareResult.DifferentWidth => "different width",
                 CompareResult.DifferentHeight => "different height",
-                CompareResult.DifferentPixelFormat => "different pixel format",
+                CompareResult.SameButDifferentPixelFormat => "different pixel format",
                 CompareResult.DifferentStride => "different stride",
                 CompareResult.DifferentImageData => "different image data",
                 _ => "unknown result",
