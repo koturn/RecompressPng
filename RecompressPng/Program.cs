@@ -146,6 +146,10 @@ namespace RecompressPng
                         {
                             CountPngInZipArchive(target);
                         }
+                        else if (execOptions.IsCopyAndShrinkZip)
+                        {
+                            RecompressPngInZipArchiveCopyAndShrink(target, null, pngOptions, execOptions);
+                        }
                         else
                         {
                             RecompressPngInZipArchive(target, null, pngOptions, execOptions);
@@ -271,6 +275,9 @@ namespace RecompressPng
                 "NAME,NAME...");
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
+            ap.Add("zip-copy-and-shrink",
+                "Copy source zip file at first, then open the copied file and recompress PNG files.\n"
+                + indent2 + "Since this method leaves entries other than PNG files untouched, it may result in smaller zip files when targeting highly compressed zip files created with 7-zip or other efficient methods.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-keep-timestamp", "Don't keep timestamp.");
             ap.Add("no-overwrite", "Don't overwrite PNG files and create images to new zip archive file or directory.");
@@ -339,6 +346,7 @@ namespace RecompressPng
                     ap.GetValue<int>("idat-size"),
                     isAddCt ? ctFormat : "",
                     ap.GetValue<bool>("add-time"),
+                    ap.GetValue<bool>("zip-copy-and-shrink"),
                     ap.GetValue<bool>('d'),
                     ap.GetValue<bool>('c'),
                     ap.GetValue<bool>('v'),
@@ -426,7 +434,11 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
+        /// <para>Re-compress all PNG files in zip archive using "zopfli" algorithm.</para>
+        /// <para>Rebuild the zip file from scratch, which means decompress all entries, even non-PNG files,
+        /// and then deflate and compress again.</para>
+        /// <para>This may cause the compressed size of the non-PNG file to be larger than that of the original zip file,
+        /// especially for zip files created with 7-zip or similar.</para>
         /// </summary>
         /// <param name="srcZipFilePath">Source zip archive file.</param>
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
@@ -588,6 +600,192 @@ namespace RecompressPng
             if (execOptions.IsDryRun)
             {
                 _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
+            {
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
+                _logger.Info(
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
+                    ToMiB(srcFileSize),
+                    ToMiB(dstFileSize),
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            if (execOptions.IsVerifyImage)
+            {
+                if (diffImageList.Count == 0)
+                {
+                    _logger.Info("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
+                    int cnt = 1;
+                    foreach (var fullname in diffImageList)
+                    {
+                        Console.WriteLine($"Different image [{cnt}]: {fullname}");
+                        cnt++;
+                    }
+                }
+            }
+            if (errorImageList.Count > 0)
+            {
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
+                int cnt = 1;
+                foreach (var fullname in errorImageList)
+                {
+                    Console.WriteLine($"Error image [{cnt}]: {fullname}");
+                    cnt++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// <para>Re-compress all PNG files in zip archive using "zopfli" algorithm.</para>
+        /// <para>Copy source zip file at first, then open the copied file and recompress PNG files.</para>
+        /// <para>Since this method leaves entries other than PNG files untouched,
+        /// it may result in smaller zip files than <see cref="RecompressPngInZipArchive(string, string, ZopfliPNGOptions, ExecuteOptions)"/>
+        /// when targeting highly compressed zip files created with 7-zip or other efficient methods.</para>
+        /// </summary>
+        /// <param name="srcZipFilePath">Source zip archive file.</param>
+        /// <param name="dstZipFilePath">Destination zip archive file.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        {
+            dstZipFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
+
+            File.Copy(srcZipFilePath, dstZipFilePath, true);
+
+            int nProcPngFiles = 0;
+            var srcFileSize = new FileInfo(srcZipFilePath).Length;
+            var diffImageList = new List<string>();
+            var errorImageList = new List<string>();
+            var totalSw = Stopwatch.StartNew();
+
+            using (var zipArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
+            {
+                var lockObj = new object();
+                var deleteEntryList = new List<ZipArchiveEntry>();
+
+                Parallel.ForEach(
+                    zipArchive.Entries,
+                    new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
+                    srcEntry =>
+                    {
+                        if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.Info("Ignore {0}", srcEntry.FullName);
+                            return;
+                        }
+
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var sw = Stopwatch.StartNew();
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
+                        try
+                        {
+                            var (data, dataLength) = ReadAllBytesRestrict(srcEntry, lockObj);
+                            if (!HasPngSignature(data))
+                            {
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                                return;
+                            }
+
+                            // Take a long time
+                            using var compressedData = ZopfliPng.OptimizePngUnmanaged(
+                                data,
+                                0,
+                                dataLength,
+                                pngOptions,
+                                execOptions.Verbose);
+
+                            var isUpdateNeeded = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
+                            var pngDataSpan = isUpdateNeeded ? CreateSpan(compressedData) : data.AsSpan(0, dataLength);
+                            if (execOptions.IsModifyPng)
+                            {
+                                isUpdateNeeded = true;
+                                pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
+                            }
+
+                            if (!execOptions.IsDryRun && isUpdateNeeded)
+                            {
+                                CreateEntryAndWriteData(
+                                    zipArchive,
+                                    srcEntry.FullName,
+                                    pngDataSpan,
+                                    lockObj,
+                                    execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
+                                lock (((ICollection)deleteEntryList).SyncRoot)
+                                {
+                                    deleteEntryList.Add(srcEntry);
+                                }
+                            }
+
+                            var logLevel = pngDataSpan.Length < dataLength ? LogLevel.Info : LogLevel.Warn;
+                            var verifyResultMsg = "";
+                            if (execOptions.IsVerifyImage)
+                            {
+                                var result = CompareImage(data.AsSpan(0, dataLength), pngDataSpan);
+                                verifyResultMsg = $" ({GetCompareResultMessage(result)})";
+                                if (result != CompareResult.Same)
+                                {
+                                    logLevel = LogLevel.Warn;
+                                    lock (((ICollection)diffImageList).SyncRoot)
+                                    {
+                                        diffImageList.Add(srcEntry.FullName);
+                                    }
+                                }
+                            }
+                            _logger.Log(
+                                logLevel,
+                                "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
+                                procIndex,
+                                srcEntry.FullName,
+                                ToMiB(dataLength),
+                                ToMiB(pngDataSpan.Length),
+                                CalcDeflatedRate(dataLength, pngDataSpan.Length) * 100.0,
+                                sw.ElapsedMilliseconds / 1000.0,
+                                verifyResultMsg);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error(
+                                ex,
+                                "[{0}] Compress {1} failed:",
+                                procIndex,
+                                srcEntry.FullName);
+                            lock (((ICollection)errorImageList).SyncRoot)
+                            {
+                                errorImageList.Add(srcEntry.FullName);
+                            }
+                        }
+                    });
+
+                foreach (var entry in deleteEntryList)
+                {
+                    entry.Delete();
+                }
+            }
+
+            if (execOptions.IsOverwrite)
+            {
+                File.Delete(srcZipFilePath);
+                File.Move(dstZipFilePath, srcZipFilePath);
+            }
+
+            Console.WriteLine("- - -");
+            if (nProcPngFiles == 0)
+            {
+                _logger.Info("No PNG file were processed.");
+                return;
+            }
+            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+                File.Delete(dstZipFilePath);
             }
             else
             {
@@ -1335,6 +1533,25 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// <para>Read all data from <see cref="ZipArchiveEntry"/>.</para>
+        /// <para>This method does the locking from the time of memory allocation
+        /// to prevent access to the Length property while writing to a Zip archive.</para>
+        /// </summary>
+        /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
+        /// <param name="lockObj">The object for lock.</param>
+        /// <returns>Read data.</returns>
+        private static (byte[] Data, int Length) ReadAllBytesRestrict(ZipArchiveEntry entry, object lockObj)
+        {
+            using var ms = new MemoryStream(4 * 1024 * 1024);
+            lock (lockObj)
+            {
+                using var zs = entry.Open();
+                zs.CopyTo(ms);
+            }
+            return (ms.GetBuffer(), (int)ms.Length);
+        }
+
+        /// <summary>
         /// Create new entry in <see cref="ZipArchive"/> and write data to it.
         /// </summary>
         /// <param name="archive">Target zip archive.</param>
@@ -1384,6 +1601,27 @@ namespace RecompressPng
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
         private static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
+        {
+            // The only way the two PNG data will be the same is
+            // if they are recompressed with the same parameters.
+            if (_memoryComparator.CompareMemory(imgData1, imgData2))
+            {
+                return CompareResult.Same;
+            }
+
+            using var bmp1 = CreateBitmap(imgData1);
+            using var bmp2 = CreateBitmap(imgData2);
+
+            return CompareImage(bmp1, bmp2);
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
+        /// <param name="imgData1">First image data.</param>
+        /// <param name="imgData2">Second image data.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static CompareResult CompareImage(Span<byte> imgData1, Span<byte> imgData2)
         {
             // The only way the two PNG data will be the same is
             // if they are recompressed with the same parameters.
