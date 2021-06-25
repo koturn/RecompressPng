@@ -547,14 +547,14 @@ namespace RecompressPng
                             }
                             _logger.Log(
                                 logLevel,
-                                "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                                "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                                 procIndex,
                                 srcEntry.FullName,
-                                sw.ElapsedMilliseconds / 1000.0,
                                 ToMiB(data.LongLength),
                                 ToMiB(pngDataSpan.Length),
-                                verifyResultMsg,
-                                CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                                CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                                sw.ElapsedMilliseconds / 1000.0,
+                                verifyResultMsg);
                         }
                         catch (Exception ex)
                         {
@@ -585,15 +585,19 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
-            if (!execOptions.IsDryRun)
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
                 _logger.Info(
-                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
                     ToMiB(dstFileSize),
-                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
             }
             if (execOptions.IsVerifyImage)
             {
@@ -711,14 +715,14 @@ namespace RecompressPng
                         }
                         _logger.Log(
                             logLevel,
-                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                             procIndex,
                             displayName,
-                            sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
                             ToMiB(pngDataSpan.Length),
-                            verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            verifyResultMsg);
                     }
                     catch (Exception ex)
                     {
@@ -777,15 +781,19 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
-            if (!execOptions.IsDryRun)
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcVrmFilePath : dstVrmFilePath).Length;
                 _logger.Info(
-                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
                     ToMiB(dstFileSize),
-                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
             }
             if (execOptions.IsVerifyImage)
             {
@@ -915,14 +923,14 @@ namespace RecompressPng
                         }
                         _logger.Log(
                             logLevel,
-                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                             procIndex,
                             srcRelPath,
-                            sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
                             ToMiB(pngDataSpan.Length),
-                            verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            verifyResultMsg);
                     }
                     catch (Exception ex)
                     {
@@ -941,12 +949,12 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
             _logger.Info(
-                "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                 ToMiB(srcTotalFileSize),
                 ToMiB(dstTotalFileSize),
-                CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0);
+                CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0,
+                totalSw.ElapsedMilliseconds / 1000.0);
             if (execOptions.IsVerifyImage)
             {
                 if (diffImageList.Count == 0)
