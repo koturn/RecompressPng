@@ -30,38 +30,6 @@ namespace RecompressPng
     static class Program
     {
         /// <summary>
-        /// Result of image comparison methods, <see cref="CompareImage(byte[], Span{byte})"/>
-        /// and <see cref="CompareImage(Bitmap, Bitmap)"/>.
-        /// </summary>
-        private enum CompareResult
-        {
-            /// <summary>
-            /// Two images are same
-            /// </summary>
-            Same,
-            /// <summary>
-            /// Two images have different widths.
-            /// </summary>
-            DifferentWidth,
-            /// <summary>
-            /// Two images have different heights.
-            /// </summary>
-            DifferentHeight,
-            /// <summary>
-            /// Two images have different pixel formats.
-            /// </summary>
-            SameButDifferentPixelFormat,
-            /// <summary>
-            /// Two images have different strides.
-            /// </summary>
-            DifferentStride,
-            /// <summary>
-            /// data of the two images are different.
-            /// </summary>
-            DifferentImageData
-        };
-
-        /// <summary>
         /// Chunk type string of IDAT chunk.
         /// </summary>
         private const string ChunkTypeIdat = "IDAT";
@@ -547,8 +515,8 @@ namespace RecompressPng
                             if (execOptions.IsVerifyImage)
                             {
                                 var result = CompareImage(data, pngDataSpan);
-                                verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                                if (result != CompareResult.Same)
+                                verifyResultMsg = $" ({result})";
+                                if (result.Type != CompareResultType.Same)
                                 {
                                     logLevel = LogLevel.Warn;
                                     lock (((ICollection)diffImageIndexNameList).SyncRoot)
@@ -724,8 +692,8 @@ namespace RecompressPng
                             if (execOptions.IsVerifyImage)
                             {
                                 var result = CompareImage(data.AsSpan(0, dataLength), pngDataSpan);
-                                verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                                if (result != CompareResult.Same)
+                                verifyResultMsg = $" ({result})";
+                                if (result.Type != CompareResultType.Same)
                                 {
                                     logLevel = LogLevel.Warn;
                                     lock (((ICollection)diffImageIndexNameList).SyncRoot)
@@ -893,8 +861,8 @@ namespace RecompressPng
                         if (execOptions.IsVerifyImage)
                         {
                             var result = CompareImage(data, pngDataSpan);
-                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                            if (result != CompareResult.Same)
+                            verifyResultMsg = $" ({result})";
+                            if (result.Type != CompareResultType.Same)
                             {
                                 logLevel = LogLevel.Warn;
                                 lock (((ICollection)diffImageIndexNameList).SyncRoot)
@@ -1097,8 +1065,8 @@ namespace RecompressPng
                         if (execOptions.IsVerifyImage)
                         {
                             var result = CompareImage(data, pngDataSpan);
-                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                            if (result != CompareResult.Same)
+                            verifyResultMsg = $" ({result})";
+                            if (result.Type != CompareResultType.Same)
                             {
                                 logLevel = LogLevel.Warn;
                                 lock (((ICollection)diffImageIndexNameList).SyncRoot)
@@ -1590,7 +1558,7 @@ namespace RecompressPng
             // if they are recompressed with the same parameters.
             if (_memoryComparator.CompareMemory(imgData1, imgData2))
             {
-                return CompareResult.Same;
+                return new CompareResult(CompareResultType.Same);
             }
 
             using var bmp1 = CreateBitmap(imgData1);
@@ -1611,7 +1579,7 @@ namespace RecompressPng
             // if they are recompressed with the same parameters.
             if (_memoryComparator.CompareMemory(imgData1, imgData2))
             {
-                return CompareResult.Same;
+                return new CompareResult(CompareResultType.Same);
             }
 
             using var bmp1 = CreateBitmap(imgData1);
@@ -1630,19 +1598,21 @@ namespace RecompressPng
         {
             if (img1.Width != img2.Width)
             {
-                return CompareResult.DifferentWidth;
+                return new CompareResult(CompareResultType.DifferentWidth, $"{img1.Width} -> {img2.Width}");
             }
             if (img1.Height != img2.Height)
             {
-                return CompareResult.DifferentHeight;
+                return new CompareResult(CompareResultType.DifferentHeight, $"{img1.Height} -> {img2.Height}");
             }
             if (img1.PixelFormat != img2.PixelFormat)
             {
-                return CompareImageByPixel(img1, img2) ? CompareResult.SameButDifferentPixelFormat : CompareResult.DifferentImageData;
+                return CompareImageByPixel(img1, img2)
+                    ? new CompareResult(CompareResultType.SameButDifferentPixelFormat, $"{img1.PixelFormat} -> {img2.PixelFormat}")
+                    : new CompareResult(CompareResultType.DifferentImageData);
             }
             if ((img1.PixelFormat & PixelFormat.Indexed) != 0)
             {
-                return CompareImageByPixel(img1, img2) ? CompareResult.Same : CompareResult.DifferentImageData;
+                return new CompareResult(CompareImageByPixel(img1, img2) ? CompareResultType.Same : CompareResultType.DifferentImageData);
             }
 
             var bd1 = img1.LockBits(
@@ -1656,7 +1626,7 @@ namespace RecompressPng
 
             if (bd1.Stride != bd2.Stride)
             {
-                return CompareResult.DifferentStride;
+                return new CompareResult(CompareResultType.DifferentStride, $"{bd1.Stride} -> {bd2.Stride}");
             }
 
             var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Height * bd1.Stride);
@@ -1664,7 +1634,7 @@ namespace RecompressPng
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
-            return isSameImageData ? CompareResult.Same : CompareResult.DifferentImageData;
+            return new CompareResult(isSameImageData ? CompareResultType.Same : CompareResultType.DifferentImageData);
         }
 
         /// <summary>
@@ -1698,25 +1668,6 @@ namespace RecompressPng
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Get message of <see cref="CompareResult"/>.
-        /// </summary>
-        /// <param name="result">A value of <see cref="CompareResult"/></param>
-        /// <returns>Message corresponding to <paramref name="result"/>.</returns>
-        private static string GetCompareResultMessage(CompareResult result)
-        {
-            return result switch
-            {
-                CompareResult.Same => "same image",
-                CompareResult.DifferentWidth => "different width",
-                CompareResult.DifferentHeight => "different height",
-                CompareResult.SameButDifferentPixelFormat => "different pixel format",
-                CompareResult.DifferentStride => "different stride",
-                CompareResult.DifferentImageData => "different image data",
-                _ => "unknown result",
-            };
         }
 
         /// <summary>
