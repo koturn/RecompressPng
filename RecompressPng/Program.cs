@@ -63,6 +63,10 @@ namespace RecompressPng
         /// </summary>
         private static readonly byte[] GltfMagicBytes;
         /// <summary>
+        /// All chunks to keep when "--keep-all-chunks" specified.
+        /// </summary>
+        private static readonly string[] AllChunks;
+        /// <summary>
         /// Memory comparator.
         /// </summary>
         private static MemoryComparator _memoryComparator;
@@ -91,6 +95,7 @@ namespace RecompressPng
             _logger = LogManager.GetCurrentClassLogger();
             PngSignature = new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a };
             GltfMagicBytes = new byte[] { (byte)'g', (byte)'l', (byte)'T', (byte)'F' };
+            AllChunks = new string[] { "acTL", "bKGD", "cHRM", "eXIf", "fcTL", "fdAT", "gAMA", "hIST", "iCCP", "iTXt", "pHYs", "sBIT", "sPLT", "sRGB", "tEXt", "tIME", "zTXt" };
         }
 
         /// <summary>
@@ -235,12 +240,16 @@ namespace RecompressPng
                 + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
             ap.Add("keep-chunks", OptionType.RequiredArgument,
-                "keep metadata chunks with these names that would normally be removed,\n"
+                "Keep metadata chunks with these names that would normally be removed,\n"
                 + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
                 + indent2 + "Due to adding extra data, this increases the result size.\n"
                 + indent2 + "By default ZopfliPNG only keeps the following chunks because they are essential:\n"
                 + indent3 + "IHDR, PLTE, tRNS, IDAT and IEND.",
                 "NAME,NAME...");
+            ap.Add("keep-all-chunks",
+                "Keep all metadata chunks.\n"
+                + indent2 + "This option is equivalent to the following.\n"
+                + indent3 + $"--keep-chunks={string.Join(',', AllChunks)}");
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("zip-copy-and-shrink",
@@ -301,6 +310,10 @@ namespace RecompressPng
             if (ap.HasValue("keep-chunks"))
             {
                 zo.KeepChunks.AddRange(ap.GetValue("keep-chunks").Split(','));
+            }
+            if (ap.GetValue<bool>("keep-all-chunks"))
+            {
+                zo.KeepChunks.AddRange(AllChunks);
             }
 
             return (
