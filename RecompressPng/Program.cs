@@ -1054,17 +1054,22 @@ namespace RecompressPng
                         if (!execOptions.IsDryRun)
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                            var isWritten = true;
                             if (isReplace || execOptions.IsModifyPng)
                             {
                                 using var fs = new FileStream(dstFilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
                                 fs.Write(pngDataSpan);
                             }
-                            else
+                            else if (srcFilePath != dstFilePath)
                             {
                                 File.Copy(srcFilePath, dstFilePath, true);
                             }
+                            else
+                            {
+                                isWritten = false;
+                            }
 
-                            if (execOptions.IsKeepTimestamp)
+                            if (execOptions.IsKeepTimestamp && isWritten)
                             {
                                 new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
                             }
