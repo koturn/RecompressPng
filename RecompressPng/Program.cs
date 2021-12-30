@@ -494,7 +494,7 @@ namespace RecompressPng
                             var data = ReadAllBytes(srcEntry, srcLock);
                             if (!HasPngSignature(data))
                             {
-                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
                                 CopyZipEntry(srcEntry);
                                 return;
                             }
@@ -666,7 +666,7 @@ namespace RecompressPng
                             var (data, dataLength) = ReadAllBytesRestrict(srcEntry, lockObj);
                             if (!HasPngSignature(data))
                             {
-                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
                                 return;
                             }
 
@@ -1033,7 +1033,7 @@ namespace RecompressPng
                         var data = File.ReadAllBytes(srcFilePath);
                         if (!HasPngSignature(data))
                         {
-                            _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                            _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcRelPath);
                             return;
                         }
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
