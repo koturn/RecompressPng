@@ -43,6 +43,11 @@ namespace RecompressPng
         /// </summary>
         public bool IsAddTimeChunk { get; set; }
         /// <summary>
+        /// Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>
+        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>.
+        /// </summary>
+        public bool IsCopyAndShrinkZip { get; set; }
+        /// <summary>
         /// Don't save any files, just see the console output.
         /// </summary>
         public bool IsDryRun { get; set; }
@@ -82,8 +87,10 @@ namespace RecompressPng
         /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
         /// <param name="isKeepTimestamp">Keep timestamp of original file.</param>
         /// <param name="idatSize">Size of each data part of IDAT chunk.</param>
-        /// <param name="textCreationTimeFormat">Format string of <see cref="System.DateTime"/> for value of Creation Time of tEXt chunk.</param>
+        /// <param name="textCreationTimeFormat">Format string of <see cref="DateTime"/> for value of Creation Time of tEXt chunk.</param>
         /// <param name="isAddTimeChunk">Whether add tIME chunk or not.</param>
+        /// <param name="isCopyAndShrinkZip">Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>
+        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>.</param>
         /// <param name="isDryRun">Don't save any files, just see the console output.</param>
         /// <param name="isCountOnly">Count target PNG files and exit this program.</param>
         /// <param name="verbose">Allow to output to stdout from zopflipng.dll.</param>
@@ -96,6 +103,7 @@ namespace RecompressPng
             int idatSize = -1,
             string textCreationTimeFormat = null,
             bool isAddTimeChunk = false,
+            bool isCopyAndShrinkZip = false,
             bool isDryRun = false,
             bool isCountOnly = false,
             bool verbose = false,
@@ -108,6 +116,7 @@ namespace RecompressPng
             IdatSize = idatSize;
             TextCreationTimeFormat = textCreationTimeFormat;
             IsAddTimeChunk = isAddTimeChunk;
+            IsCopyAndShrinkZip = isCopyAndShrinkZip;
             IsDryRun = isDryRun;
             IsCountOnly = isCountOnly;
             Verbose = verbose;
@@ -128,6 +137,7 @@ namespace RecompressPng
                 IdatSize,
                 TextCreationTimeFormat,
                 IsAddTimeChunk,
+                IsCopyAndShrinkZip,
                 IsDryRun,
                 IsCountOnly,
                 Verbose,

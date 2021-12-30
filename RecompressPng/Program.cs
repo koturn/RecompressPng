@@ -9,6 +9,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.X86;
 using System.Security;
 using System.Text;
 using System.Threading;
@@ -28,40 +29,6 @@ namespace RecompressPng
     /// </summary>
     static class Program
     {
-        /// <summary>
-        /// Result of image comparison methods,
-        /// <see cref="CompareImage(byte[], byte[])"/>,
-        /// <see cref="CompareImage(byte[], long, byte[], long)"/>
-        /// and <see cref="CompareImage(Bitmap, Bitmap)"/>.
-        /// </summary>
-        private enum CompareResult
-        {
-            /// <summary>
-            /// Two images are same
-            /// </summary>
-            Same,
-            /// <summary>
-            /// Two images have different widths.
-            /// </summary>
-            DifferentWidth,
-            /// <summary>
-            /// Two images have different heights.
-            /// </summary>
-            DifferentHeight,
-            /// <summary>
-            /// Two images have different pixel formats.
-            /// </summary>
-            DifferentPixelFormat,
-            /// <summary>
-            /// Two images have different strides.
-            /// </summary>
-            DifferentStride,
-            /// <summary>
-            /// data of the two images are different.
-            /// </summary>
-            DifferentImageData
-        };
-
         /// <summary>
         /// Chunk type string of IDAT chunk.
         /// </summary>
@@ -92,22 +59,43 @@ namespace RecompressPng
         /// </summary>
         private static readonly byte[] PngSignature;
         /// <summary>
+        /// Magic number byte sequence of glTF file.
+        /// </summary>
+        private static readonly byte[] GltfMagicBytes;
+        /// <summary>
+        /// All chunks to keep when "--keep-all-chunks" specified.
+        /// </summary>
+        private static readonly string[] AllChunks;
+        /// <summary>
         /// Memory comparator.
         /// </summary>
         private static MemoryComparator _memoryComparator;
 
 
         /// <summary>
-        /// Setup DLL search path.
+        /// Setup DLL search paths and logging instance.
         /// </summary>
         static Program()
         {
-            UnsafeNativeMethods.SetDllDirectory(
-                Path.Combine(
-                    AppContext.BaseDirectory,
-                    Environment.Is64BitProcess ? "x64" : "x86"));
+            var dllDir = Path.Combine(
+                AppContext.BaseDirectory,
+                Environment.Is64BitProcess ? "x64" : "x86");
+            // Current directory will be searched previously.
+            // Paths that are added later have a higher priority in the search.
+            //   1. Current Directory
+            //   2. dllDir + @"\avx2"
+            //   3. dllDir
+            UnsafeNativeMethods.AddDllDirectory(dllDir);
+            if (Avx2.IsSupported)
+            {
+                UnsafeNativeMethods.AddDllDirectory(Path.Combine(dllDir, "avx2"));
+            }
+            UnsafeNativeMethods.SetDefaultDllDirectories(LoadLibrarySearchFlags.DefaultDirs);
+
             _logger = LogManager.GetCurrentClassLogger();
             PngSignature = new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a };
+            GltfMagicBytes = new byte[] { (byte)'g', (byte)'l', (byte)'T', (byte)'F' };
+            AllChunks = new string[] { "acTL", "bKGD", "cHRM", "eXIf", "fcTL", "fdAT", "gAMA", "hIST", "iCCP", "iTXt", "pHYs", "sBIT", "sPLT", "sRGB", "tEXt", "tIME", "zTXt" };
         }
 
         /// <summary>
@@ -131,12 +119,16 @@ namespace RecompressPng
                         {
                             CountPngInZipArchive(target);
                         }
+                        else if (execOptions.IsCopyAndShrinkZip)
+                        {
+                            RecompressPngInZipArchiveCopyAndShrink(target, null, pngOptions, execOptions);
+                        }
                         else
                         {
                             RecompressPngInZipArchive(target, null, pngOptions, execOptions);
                         }
                     }
-                    else if (target.EndsWith(".vrm", StringComparison.OrdinalIgnoreCase) || target.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                    else if (IsGltfFile(target))
                     {
                         if (execOptions.IsCountOnly)
                         {
@@ -149,7 +141,7 @@ namespace RecompressPng
                     }
                     else
                     {
-                        _logger.Fatal("Specified file is not zip archive: ", target);
+                        _logger.Fatal("Specified file is neither zip archive nor glTF file: {0}", target);
                         return 1;
                     }
                 }
@@ -248,12 +240,16 @@ namespace RecompressPng
                 + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
             ap.Add("keep-chunks", OptionType.RequiredArgument,
-                "keep metadata chunks with these names that would normally be removed,\n"
+                "Keep metadata chunks with these names that would normally be removed,\n"
                 + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
                 + indent2 + "Due to adding extra data, this increases the result size.\n"
                 + indent2 + "By default ZopfliPNG only keeps the following chunks because they are essential:\n"
                 + indent3 + "IHDR, PLTE, tRNS, IDAT and IEND.",
                 "NAME,NAME...");
+            ap.Add("keep-all-chunks",
+                "Keep all metadata chunks.\n"
+                + indent2 + "This option is equivalent to the following.\n"
+                + indent3 + $"--keep-chunks={string.Join(',', AllChunks)}");
             ap.Add("keep-color-type",
                 "Keep original color type (RGB, RGBA, gray, gray+alpha or palette) and bit depth of the PNG.\n"
                     + indent2 + "This results in a loss of compression opportunities,\n"
@@ -261,6 +257,9 @@ namespace RecompressPng
                     + indent2 + "May be useful if a device does not support decoding PNGs of a particular color type.");
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
+            ap.Add("zip-copy-and-shrink",
+                "Copy source zip file at first, then open the copied file and recompress PNG files.\n"
+                + indent2 + "Since this method leaves entries other than PNG files untouched, it may result in smaller zip files when targeting highly compressed zip files created with 7-zip or other efficient methods.");
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-keep-timestamp", "Don't keep timestamp.");
             ap.Add("no-overwrite", "Don't overwrite PNG files and create images to new zip archive file or directory.");
@@ -318,6 +317,10 @@ namespace RecompressPng
             {
                 zo.KeepChunks.AddRange(ap.GetValue("keep-chunks").Split(','));
             }
+            if (ap.GetValue<bool>("keep-all-chunks"))
+            {
+                zo.KeepChunks.AddRange(AllChunks);
+            }
 
             return (
                 targets[0],
@@ -330,6 +333,7 @@ namespace RecompressPng
                     ap.GetValue<int>("idat-size"),
                     isAddCt ? ctFormat : "",
                     ap.GetValue<bool>("add-time"),
+                    ap.GetValue<bool>("zip-copy-and-shrink"),
                     ap.GetValue<bool>('d'),
                     ap.GetValue<bool>('c'),
                     ap.GetValue<bool>('v'),
@@ -418,7 +422,11 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
+        /// <para>Re-compress all PNG files in zip archive using "zopfli" algorithm.</para>
+        /// <para>Rebuild the zip file from scratch, which means decompress all entries, even non-PNG files,
+        /// and then deflate and compress again.</para>
+        /// <para>This may cause the compressed size of the non-PNG file to be larger than that of the original zip file,
+        /// especially for zip files created with 7-zip or similar.</para>
         /// </summary>
         /// <param name="srcZipFilePath">Source zip archive file.</param>
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
@@ -428,7 +436,7 @@ namespace RecompressPng
         {
             dstZipFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcZipFilePath),
-                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli.zip");
+                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             if (File.Exists(dstZipFilePath))
             {
@@ -437,8 +445,8 @@ namespace RecompressPng
 
             int nProcPngFiles = 0;
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
-            var diffImageList = new List<string>();
-            var errorImageList = new List<string>();
+            var diffImageIndexNameList = new List<ImageIndexNamePair>();
+            var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
             using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
@@ -447,15 +455,16 @@ namespace RecompressPng
                 var srcLock = new object();
                 var dstLock = execOptions.IsDryRun ? null : new object();
 
-                void CopyZipEntry(ZipArchiveEntry srcEntry, int procIndex, Stopwatch sw)
+                void CopyZipEntry(ZipArchiveEntry srcEntry)
                 {
                     if (execOptions.IsDryRun)
                     {
                         return;
                     }
-                    _logger.Info("[{0}] Copy {1} ...", procIndex, srcEntry.FullName);
+                    _logger.Info("Copy {0} ...", srcEntry.FullName);
                     try
                     {
+                        var sw = Stopwatch.StartNew();
                         CreateEntryAndWriteData(
                             dstArchive,
                             srcEntry.FullName,
@@ -463,14 +472,13 @@ namespace RecompressPng
                             dstLock,
                             execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
                         _logger.Info(
-                            "[{0}] Copy {1} done: {2:F3} seconds",
-                            procIndex,
+                            "Copy {0} done: {1:F3} seconds",
                             srcEntry.FullName,
                             sw.ElapsedMilliseconds / 1000.0);
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, "[{0}] Copy {1} failed: ", procIndex, srcEntry.FullName);
+                        _logger.Error(ex, "Copy {0} failed: ", srcEntry.FullName);
                     }
                 }
 
@@ -479,23 +487,22 @@ namespace RecompressPng
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
-                        var sw = Stopwatch.StartNew();
-                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
-
                         if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         {
-                            CopyZipEntry(srcEntry, procIndex, sw);
+                            CopyZipEntry(srcEntry);
                             return;
                         }
 
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var sw = Stopwatch.StartNew();
                         _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var data = ReadAllBytes(srcEntry, srcLock);
                             if (!HasPngSignature(data))
                             {
-                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
-                                CopyZipEntry(srcEntry, procIndex, sw);
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
+                                CopyZipEntry(srcEntry);
                                 return;
                             }
 
@@ -528,26 +535,26 @@ namespace RecompressPng
                             if (execOptions.IsVerifyImage)
                             {
                                 var result = CompareImage(data, pngDataSpan);
-                                verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                                if (result != CompareResult.Same)
+                                verifyResultMsg = $" ({result})";
+                                if (result.Type != CompareResultType.Same)
                                 {
                                     logLevel = LogLevel.Warn;
-                                    lock (((ICollection)diffImageList).SyncRoot)
+                                    lock (((ICollection)diffImageIndexNameList).SyncRoot)
                                     {
-                                        diffImageList.Add(srcEntry.FullName);
+                                        diffImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcEntry.FullName));
                                     }
                                 }
                             }
                             _logger.Log(
                                 logLevel,
-                                "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                                "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                                 procIndex,
                                 srcEntry.FullName,
-                                sw.ElapsedMilliseconds / 1000.0,
                                 ToMiB(data.LongLength),
                                 ToMiB(pngDataSpan.Length),
-                                verifyResultMsg,
-                                CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                                CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                                sw.ElapsedMilliseconds / 1000.0,
+                                verifyResultMsg);
                         }
                         catch (Exception ex)
                         {
@@ -556,10 +563,10 @@ namespace RecompressPng
                                 "[{0}] Compress {1} failed:",
                                 procIndex,
                                 srcEntry.FullName);
-                            CopyZipEntry(srcEntry, procIndex, sw);
-                            lock (((ICollection)errorImageList).SyncRoot)
+                            CopyZipEntry(srcEntry);
+                            lock (((ICollection)errorImageIndexNameList).SyncRoot)
                             {
-                                errorImageList.Add(srcEntry.FullName);
+                                errorImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcEntry.FullName));
                             }
                         }
                     });
@@ -578,41 +585,223 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
-            if (!execOptions.IsDryRun)
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
                 _logger.Info(
-                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
                     ToMiB(dstFileSize),
-                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
             }
             if (execOptions.IsVerifyImage)
             {
-                if (diffImageList.Count == 0)
+                if (diffImageIndexNameList.Count == 0)
                 {
                     _logger.Info("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
-                    int cnt = 1;
-                    foreach (var fullname in diffImageList)
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    foreach (var (index, name) in diffImageIndexNameList)
                     {
-                        Console.WriteLine($"Different image [{cnt}]: {fullname}");
-                        cnt++;
+                        Console.WriteLine($"Different image [{index}]: {name}");
                     }
                 }
             }
-            if (errorImageList.Count > 0)
+            if (errorImageIndexNameList.Count > 0)
             {
-                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
-                int cnt = 1;
-                foreach (var fullname in errorImageList)
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageIndexNameList.Count);
+                foreach (var (index, name) in errorImageIndexNameList)
                 {
-                    Console.WriteLine($"Error image [{cnt}]: {fullname}");
-                    cnt++;
+                    Console.WriteLine($"Error image [{index}]: {name}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// <para>Re-compress all PNG files in zip archive using "zopfli" algorithm.</para>
+        /// <para>Copy source zip file at first, then open the copied file and recompress PNG files.</para>
+        /// <para>Since this method leaves entries other than PNG files untouched,
+        /// it may result in smaller zip files than <see cref="RecompressPngInZipArchive(string, string, ZopfliPNGOptions, ExecuteOptions)"/>
+        /// when targeting highly compressed zip files created with 7-zip or other efficient methods.</para>
+        /// </summary>
+        /// <param name="srcZipFilePath">Source zip archive file.</param>
+        /// <param name="dstZipFilePath">Destination zip archive file.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        {
+            dstZipFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
+
+            File.Copy(srcZipFilePath, dstZipFilePath, true);
+
+            int nProcPngFiles = 0;
+            var srcFileSize = new FileInfo(srcZipFilePath).Length;
+            var diffImageIndexNameList = new List<ImageIndexNamePair>();
+            var errorImageIndexNameList = new List<ImageIndexNamePair>();
+            var totalSw = Stopwatch.StartNew();
+
+            using (var zipArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
+            {
+                var lockObj = new object();
+                var deleteEntryList = new List<ZipArchiveEntry>();
+
+                Parallel.ForEach(
+                    zipArchive.Entries,
+                    new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
+                    srcEntry =>
+                    {
+                        if (!srcEntry.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.Info("Ignore {0}", srcEntry.FullName);
+                            return;
+                        }
+
+                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var sw = Stopwatch.StartNew();
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
+                        try
+                        {
+                            var (data, dataLength) = ReadAllBytesRestrict(srcEntry, lockObj);
+                            if (!HasPngSignature(data))
+                            {
+                                _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
+                                return;
+                            }
+
+                            // Take a long time
+                            using var compressedData = ZopfliPng.OptimizePngUnmanaged(
+                                data,
+                                0,
+                                dataLength,
+                                pngOptions,
+                                execOptions.Verbose);
+
+                            var isUpdateNeeded = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
+                            var pngDataSpan = isUpdateNeeded ? CreateSpan(compressedData) : data.AsSpan(0, dataLength);
+                            if (execOptions.IsModifyPng)
+                            {
+                                isUpdateNeeded = true;
+                                pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
+                            }
+
+                            if (!execOptions.IsDryRun && isUpdateNeeded)
+                            {
+                                CreateEntryAndWriteData(
+                                    zipArchive,
+                                    srcEntry.FullName,
+                                    pngDataSpan,
+                                    lockObj,
+                                    execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
+                                lock (((ICollection)deleteEntryList).SyncRoot)
+                                {
+                                    deleteEntryList.Add(srcEntry);
+                                }
+                            }
+
+                            var logLevel = pngDataSpan.Length < dataLength ? LogLevel.Info : LogLevel.Warn;
+                            var verifyResultMsg = "";
+                            if (execOptions.IsVerifyImage)
+                            {
+                                var result = CompareImage(data.AsSpan(0, dataLength), pngDataSpan);
+                                verifyResultMsg = $" ({result})";
+                                if (result.Type != CompareResultType.Same)
+                                {
+                                    logLevel = LogLevel.Warn;
+                                    lock (((ICollection)diffImageIndexNameList).SyncRoot)
+                                    {
+                                        diffImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcEntry.FullName));
+                                    }
+                                }
+                            }
+                            _logger.Log(
+                                logLevel,
+                                "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
+                                procIndex,
+                                srcEntry.FullName,
+                                ToMiB(dataLength),
+                                ToMiB(pngDataSpan.Length),
+                                CalcDeflatedRate(dataLength, pngDataSpan.Length) * 100.0,
+                                sw.ElapsedMilliseconds / 1000.0,
+                                verifyResultMsg);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error(
+                                ex,
+                                "[{0}] Compress {1} failed:",
+                                procIndex,
+                                srcEntry.FullName);
+                            lock (((ICollection)errorImageIndexNameList).SyncRoot)
+                            {
+                                errorImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcEntry.FullName));
+                            }
+                        }
+                    });
+
+                foreach (var entry in deleteEntryList)
+                {
+                    entry.Delete();
+                }
+            }
+
+            if (execOptions.IsOverwrite)
+            {
+                File.Delete(srcZipFilePath);
+                File.Move(dstZipFilePath, srcZipFilePath);
+            }
+
+            Console.WriteLine("- - -");
+            if (nProcPngFiles == 0)
+            {
+                _logger.Info("No PNG file were processed.");
+                return;
+            }
+            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+                File.Delete(dstZipFilePath);
+            }
+            else
+            {
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcZipFilePath : dstZipFilePath).Length;
+                _logger.Info(
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
+                    ToMiB(srcFileSize),
+                    ToMiB(dstFileSize),
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            if (execOptions.IsVerifyImage)
+            {
+                if (diffImageIndexNameList.Count == 0)
+                {
+                    _logger.Info("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    foreach (var (index, name) in diffImageIndexNameList)
+                    {
+                        Console.WriteLine($"Different image [{index}]: {name}");
+                    }
+                }
+            }
+            if (errorImageIndexNameList.Count > 0)
+            {
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageIndexNameList.Count);
+                foreach (var (index, name) in errorImageIndexNameList)
+                {
+                    Console.WriteLine($"Error image [{index}]: {name}");
                 }
             }
         }
@@ -628,7 +817,7 @@ namespace RecompressPng
         {
             dstVrmFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcVrmFilePath),
-                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli.vrm");
+                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
 
             if (File.Exists(dstVrmFilePath))
             {
@@ -640,8 +829,8 @@ namespace RecompressPng
 
             int nProcPngFiles = 0;
             var srcFileSize = new FileInfo(srcVrmFilePath).Length;
-            var diffImageList = new List<string>();
-            var errorImageList = new List<string>();
+            var diffImageIndexNameList = new List<ImageIndexNamePair>();
+            var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
             // Overwrite options.
@@ -692,26 +881,26 @@ namespace RecompressPng
                         if (execOptions.IsVerifyImage)
                         {
                             var result = CompareImage(data, pngDataSpan);
-                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                            if (result != CompareResult.Same)
+                            verifyResultMsg = $" ({result})";
+                            if (result.Type != CompareResultType.Same)
                             {
                                 logLevel = LogLevel.Warn;
-                                lock (((ICollection)diffImageList).SyncRoot)
+                                lock (((ICollection)diffImageIndexNameList).SyncRoot)
                                 {
-                                    diffImageList.Add(displayName);
+                                    diffImageIndexNameList.Add(new ImageIndexNamePair(procIndex, displayName));
                                 }
                             }
                         }
                         _logger.Log(
                             logLevel,
-                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                             procIndex,
                             displayName,
-                            sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
                             ToMiB(pngDataSpan.Length),
-                            verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            verifyResultMsg);
                     }
                     catch (Exception ex)
                     {
@@ -720,9 +909,9 @@ namespace RecompressPng
                             "[{0}] Compress {1} failed:",
                             procIndex,
                             displayName);
-                        lock (((ICollection)errorImageList).SyncRoot)
+                        lock (((ICollection)errorImageIndexNameList).SyncRoot)
                         {
-                            errorImageList.Add(displayName);
+                            errorImageIndexNameList.Add(new ImageIndexNamePair(procIndex, displayName));
                         }
                     }
                 });
@@ -770,41 +959,41 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
-            if (!execOptions.IsDryRun)
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
             {
                 var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcVrmFilePath : dstVrmFilePath).Length;
                 _logger.Info(
-                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
                     ToMiB(dstFileSize),
-                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0);
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
             }
             if (execOptions.IsVerifyImage)
             {
-                if (diffImageList.Count == 0)
+                if (diffImageIndexNameList.Count == 0)
                 {
                     _logger.Info("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
-                    int cnt = 1;
-                    foreach (var fullname in diffImageList)
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    foreach (var (index, name) in diffImageIndexNameList)
                     {
-                        Console.WriteLine($"Different image [{cnt}]: {fullname}");
-                        cnt++;
+                        Console.WriteLine($"Different image [{index}]: {name}");
                     }
                 }
             }
-            if (errorImageList.Count > 0)
+            if (errorImageIndexNameList.Count > 0)
             {
-                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
-                int cnt = 1;
-                foreach (var fullname in errorImageList)
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageIndexNameList.Count);
+                foreach (var (index, name) in errorImageIndexNameList)
                 {
-                    Console.WriteLine($"Error image [{cnt}]: {fullname}");
-                    cnt++;
+                    Console.WriteLine($"Error image [{index}]: {name}");
                 }
             }
         }
@@ -827,8 +1016,8 @@ namespace RecompressPng
             var dstTotalFileSize = 0L;
 
             int nProcPngFiles = 0;
-            var diffImageList = new List<string>();
-            var errorImageList = new List<string>();
+            var diffImageIndexNameList = new List<ImageIndexNamePair>();
+            var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
             Parallel.ForEach(
@@ -851,7 +1040,7 @@ namespace RecompressPng
                         var data = File.ReadAllBytes(srcFilePath);
                         if (!HasPngSignature(data))
                         {
-                            _logger.Error("[{0}] Compress {1} failed, invalid PNG signature");
+                            _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcRelPath);
                             return;
                         }
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
@@ -872,17 +1061,22 @@ namespace RecompressPng
                         if (!execOptions.IsDryRun)
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                            var isWritten = true;
                             if (isReplace || execOptions.IsModifyPng)
                             {
                                 using var fs = new FileStream(dstFilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
                                 fs.Write(pngDataSpan);
                             }
-                            else
+                            else if (srcFilePath != dstFilePath)
                             {
                                 File.Copy(srcFilePath, dstFilePath, true);
                             }
+                            else
+                            {
+                                isWritten = false;
+                            }
 
-                            if (execOptions.IsKeepTimestamp)
+                            if (execOptions.IsKeepTimestamp && isWritten)
                             {
                                 new FileInfo(dstFilePath).LastWriteTime = originalTimestamp;
                             }
@@ -896,33 +1090,33 @@ namespace RecompressPng
                         if (execOptions.IsVerifyImage)
                         {
                             var result = CompareImage(data, pngDataSpan);
-                            verifyResultMsg = $" ({GetCompareResultMessage(result)})";
-                            if (result != CompareResult.Same)
+                            verifyResultMsg = $" ({result})";
+                            if (result.Type != CompareResultType.Same)
                             {
                                 logLevel = LogLevel.Warn;
-                                lock (((ICollection)diffImageList).SyncRoot)
+                                lock (((ICollection)diffImageIndexNameList).SyncRoot)
                                 {
-                                    diffImageList.Add(srcRelPath);
+                                    diffImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcRelPath));
                                 }
                             }
                         }
                         _logger.Log(
                             logLevel,
-                            "[{0}] Compress {1} done: {2:F3} seconds, {3:F3} MiB -> {4:F3} MiB{5} (deflated {6:F2}%)",
+                            "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
                             procIndex,
                             srcRelPath,
-                            sw.ElapsedMilliseconds / 1000.0,
                             ToMiB(data.LongLength),
                             ToMiB(pngDataSpan.Length),
-                            verifyResultMsg,
-                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0);
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            verifyResultMsg);
                     }
                     catch (Exception ex)
                     {
                         _logger.Error(ex, "[{0}] Compress {1} failed", procIndex, srcRelPath);
-                        lock (((ICollection)errorImageList).SyncRoot)
+                        lock (((ICollection)errorImageIndexNameList).SyncRoot)
                         {
-                            errorImageList.Add(srcRelPath);
+                            errorImageIndexNameList.Add(new ImageIndexNamePair(procIndex, srcRelPath));
                         }
                     }
                 });
@@ -934,37 +1128,33 @@ namespace RecompressPng
                 return;
             }
             _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
-            _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
             _logger.Info(
-                "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%)",
+                "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                 ToMiB(srcTotalFileSize),
                 ToMiB(dstTotalFileSize),
-                CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0);
+                CalcDeflatedRate(srcTotalFileSize, dstTotalFileSize) * 100.0,
+                totalSw.ElapsedMilliseconds / 1000.0);
             if (execOptions.IsVerifyImage)
             {
-                if (diffImageList.Count == 0)
+                if (diffImageIndexNameList.Count == 0)
                 {
                     _logger.Info("All the image data before and after re-compressing are the same.");
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageList.Count, nProcPngFiles);
-                    int cnt = 1;
-                    foreach (var relPath in diffImageList)
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    foreach (var (index, name) in diffImageIndexNameList)
                     {
-                        Console.WriteLine($"Different image [{cnt}]: {relPath}");
-                        cnt++;
+                        Console.WriteLine($"Different image [{index}]: {name}");
                     }
                 }
             }
-            if (errorImageList.Count > 0)
+            if (errorImageIndexNameList.Count > 0)
             {
-                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageList.Count);
-                int cnt = 1;
-                foreach (var relPath in errorImageList)
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageIndexNameList.Count);
+                foreach (var (index, name) in errorImageIndexNameList)
                 {
-                    Console.WriteLine($"Error image [{cnt}]: {relPath}");
-                    cnt++;
+                    Console.WriteLine($"Error image [{index}]: {name}");
                 }
             }
         }
@@ -1050,10 +1240,10 @@ namespace RecompressPng
         /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
         private static bool IsZipFile(string zipFilePath)
         {
-            var buffer = new byte[4];
+            Span<byte> buffer = stackalloc byte[4];
             using (var fs = new FileStream(zipFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+                if (fs.Read(buffer) < buffer.Length)
                 {
                     return false;
                 }
@@ -1067,7 +1257,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a zip signature, otherwise false.</returns>
-        private static bool HasZipSignature(byte[] data)
+        private static bool HasZipSignature(Span<byte> data)
         {
             return data.Length >= 4
                 && data[0] == 'P'
@@ -1101,6 +1291,48 @@ namespace RecompressPng
             for (int i = 0; i < PngSignature.Length; i++)
             {
                 if (data[i] != PngSignature[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// <para>Identify glTF file or not.</para>
+        /// <para>Just determine if the first four bytes are 'g', 'l', 'T' and 'F'.</para>
+        /// </summary>
+        /// <param name="gltfFilePath">Target glTF file path,</param>
+        /// <returns>True if specified file is a glTF file, otherwise false.</returns>
+        private static bool IsGltfFile(string gltfFilePath)
+        {
+            Span<byte> buffer = stackalloc byte[4];
+            using (var fs = new FileStream(gltfFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (fs.Read(buffer) < buffer.Length)
+                {
+                    return false;
+                }
+            }
+            return HasGltfMagic(buffer);
+        }
+
+        /// <summary>
+        /// Identify the specified binary data has a glTF magic number or not.
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
+        private static bool HasGltfMagic(Span<byte> data)
+        {
+            if (data.Length < GltfMagicBytes.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < GltfMagicBytes.Length; i++)
+            {
+                if (data[i] != GltfMagicBytes[i])
                 {
                     return false;
                 }
@@ -1278,6 +1510,25 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// <para>Read all data from <see cref="ZipArchiveEntry"/>.</para>
+        /// <para>This method does the locking from the time of memory allocation
+        /// to prevent access to the Length property while writing to a Zip archive.</para>
+        /// </summary>
+        /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
+        /// <param name="lockObj">The object for lock.</param>
+        /// <returns>Read data.</returns>
+        private static (byte[] Data, int Length) ReadAllBytesRestrict(ZipArchiveEntry entry, object lockObj)
+        {
+            using var ms = new MemoryStream(4 * 1024 * 1024);
+            lock (lockObj)
+            {
+                using var zs = entry.Open();
+                zs.CopyTo(ms);
+            }
+            return (ms.GetBuffer(), (int)ms.Length);
+        }
+
+        /// <summary>
         /// Create new entry in <see cref="ZipArchive"/> and write data to it.
         /// </summary>
         /// <param name="archive">Target zip archive.</param>
@@ -1326,58 +1577,40 @@ namespace RecompressPng
         /// <param name="imgData1">First image data.</param>
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(byte[] imgData1, byte[] imgData2)
-        {
-            using var bmp1 = CreateBitmapFromByteArray(imgData1);
-            using var bmp2 = CreateBitmapFromByteArray(imgData2);
-
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
-            {
-                return result;
-            }
-            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgDataLength1">Byte length of <paramref name="imgData1"/>.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <param name="imgDataLength2">Byte length of <paramref name="imgData2"/>.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(byte[] imgData1, long imgDataLength1, byte[] imgData2, long imgDataLength2)
-        {
-            using var bmp1 = CreateBitmapFromByteArray(imgData1, imgDataLength1);
-            using var bmp2 = CreateBitmapFromByteArray(imgData2, imgDataLength2);
-
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
-            {
-                return result;
-            }
-            return imgData1.LongLength == imgData2.LongLength && _memoryComparator.CompareMemory(imgData1, imgData2, imgData1.Length)
-                ? CompareResult.Same : CompareResult.DifferentImageData;
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
         private static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
         {
-            using var bmp1 = CreateBitmapFromByteArray(imgData1);
-            using var bmp2 = CreateBitmapFromSpan(imgData2);
-
-            var result = CompareImage(bmp1, bmp2);
-            if (result == CompareResult.Same)
+            // The only way the two PNG data will be the same is
+            // if they are recompressed with the same parameters.
+            if (_memoryComparator.CompareMemory(imgData1, imgData2))
             {
-                return result;
+                return new CompareResult(CompareResultType.Same);
             }
-            return _memoryComparator.CompareMemory(imgData1, imgData2) ? CompareResult.Same : CompareResult.DifferentImageData;
+
+            using var bmp1 = CreateBitmap(imgData1);
+            using var bmp2 = CreateBitmap(imgData2);
+
+            return CompareImage(bmp1, bmp2);
+        }
+
+        /// <summary>
+        /// Compare and determine two image data is same or not.
+        /// </summary>
+        /// <param name="imgData1">First image data.</param>
+        /// <param name="imgData2">Second image data.</param>
+        /// <returns>True if two image data are same, otherwise false.</returns>
+        private static CompareResult CompareImage(Span<byte> imgData1, Span<byte> imgData2)
+        {
+            // The only way the two PNG data will be the same is
+            // if they are recompressed with the same parameters.
+            if (_memoryComparator.CompareMemory(imgData1, imgData2))
+            {
+                return new CompareResult(CompareResultType.Same);
+            }
+
+            using var bmp1 = CreateBitmap(imgData1);
+            using var bmp2 = CreateBitmap(imgData2);
+
+            return CompareImage(bmp1, bmp2);
         }
 
         /// <summary>
@@ -1390,15 +1623,21 @@ namespace RecompressPng
         {
             if (img1.Width != img2.Width)
             {
-                return CompareResult.DifferentWidth;
+                return new CompareResult(CompareResultType.DifferentWidth, $"{img1.Width} -> {img2.Width}");
             }
             if (img1.Height != img2.Height)
             {
-                return CompareResult.DifferentHeight;
+                return new CompareResult(CompareResultType.DifferentHeight, $"{img1.Height} -> {img2.Height}");
             }
             if (img1.PixelFormat != img2.PixelFormat)
             {
-                return CompareResult.DifferentPixelFormat;
+                return CompareImageByPixel(img1, img2)
+                    ? new CompareResult(CompareResultType.SameButDifferentPixelFormat, $"{img1.PixelFormat} -> {img2.PixelFormat}")
+                    : new CompareResult(CompareResultType.DifferentImageData);
+            }
+            if ((img1.PixelFormat & PixelFormat.Indexed) != 0)
+            {
+                return new CompareResult(CompareImageByPixel(img1, img2) ? CompareResultType.Same : CompareResultType.DifferentImageData);
             }
 
             var bd1 = img1.LockBits(
@@ -1412,34 +1651,48 @@ namespace RecompressPng
 
             if (bd1.Stride != bd2.Stride)
             {
-                return CompareResult.DifferentStride;
+                return new CompareResult(CompareResultType.DifferentStride, $"{bd1.Stride} -> {bd2.Stride}");
             }
 
-            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Stride * bd1.Height);
+            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Height * bd1.Stride);
 
             img2.UnlockBits(bd2);
             img1.UnlockBits(bd1);
 
-            return isSameImageData ? CompareResult.Same : CompareResult.DifferentImageData;
+            return new CompareResult(isSameImageData ? CompareResultType.Same : CompareResultType.DifferentImageData);
         }
 
         /// <summary>
-        /// Get message of <see cref="CompareResult"/>.
+        /// Compare the two images pixel by pixel.
         /// </summary>
-        /// <param name="result">A value of <see cref="CompareResult"/></param>
-        /// <returns>Message corresponding to <paramref name="result"/>.</returns>
-        private static string GetCompareResultMessage(CompareResult result)
+        /// <param name="img1">First image data.</param>
+        /// <param name="img2">Second image data.</param>
+        /// <returns><c>true</c> if two images are same, otherwise <c>false</c>.</returns>
+        private static bool CompareImageByPixel(Bitmap img1, Bitmap img2)
         {
-            return result switch
+            if (img1.Width != img2.Width)
             {
-                CompareResult.Same => "same image",
-                CompareResult.DifferentWidth => "different width",
-                CompareResult.DifferentHeight => "different height",
-                CompareResult.DifferentPixelFormat => "different pixel format",
-                CompareResult.DifferentStride => "different stride",
-                CompareResult.DifferentImageData => "different image data",
-                _ => "unknown result",
-            };
+                return false;
+            }
+            if (img1.Height != img2.Height)
+            {
+                return false;
+            }
+
+            var height = img1.Height;
+            var width = img1.Width;
+            for (int i = 0; i < height; i++)
+            {
+                for (int j = 0; j < width; j++)
+                {
+                    if (img1.GetPixel(j, i) != img2.GetPixel(j, i))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -1447,9 +1700,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromByteArray(byte[] imgData)
+        private static Bitmap CreateBitmap(byte[] imgData)
         {
-            return CreateBitmapFromByteArray(imgData, imgData.LongLength);
+            return CreateBitmap(imgData, imgData.LongLength);
         }
 
         /// <summary>
@@ -1458,7 +1711,7 @@ namespace RecompressPng
         /// <param name="imgData">Image data.</param>
         /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromByteArray(byte[] imgData, long imgDataLength)
+        private static Bitmap CreateBitmap(byte[] imgData, long imgDataLength)
         {
             using var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false);
             return (Bitmap)Image.FromStream(ms);
@@ -1469,7 +1722,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static unsafe Bitmap CreateBitmapFromSpan(Span<byte> imgData)
+        private static unsafe Bitmap CreateBitmap(Span<byte> imgData)
         {
             fixed (byte* p = imgData)
             {
@@ -1483,9 +1736,9 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData)
+        private static Bitmap CreateBitmap(SafeBuffer imgData)
         {
-            return CreateBitmapFromSafeBuffer(imgData, (long)imgData.ByteLength);
+            return CreateBitmap(imgData, (long)imgData.ByteLength);
         }
 
         /// <summary>
@@ -1494,7 +1747,7 @@ namespace RecompressPng
         /// <param name="imgData">Image data.</param>
         /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmapFromSafeBuffer(SafeBuffer imgData, long imgDataLength)
+        private static Bitmap CreateBitmap(SafeBuffer imgData, long imgDataLength)
         {
             using var ms = new UnmanagedMemoryStream(imgData, 0, (int)imgDataLength);
             return (Bitmap)Image.FromStream(ms);
@@ -1507,13 +1760,48 @@ namespace RecompressPng
         internal class UnsafeNativeMethods
         {
             /// <summary>
-            /// Adds a directory to the search path used to locate DLLs for the application.
+            /// Adds a directory to the process DLL search path.
             /// </summary>
             /// <param name="path">Path to DLL directory.</param>
             /// <returns>True if success to set directory, otherwise false.</returns>
             [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
             [SuppressUnmanagedCodeSecurity]
-            public static extern bool SetDllDirectory([In] string path);
+            public static extern bool AddDllDirectory([In] string path);
+            /// <summary>
+            /// <para>Specifies a default set of directories to search when the calling process loads a DLL.</para>
+            /// <para>This search path is used when LoadLibraryEx is called with no <see cref="LoadLibrarySearchFlags"/> flags.</para>
+            /// </summary>
+            /// <param name="directoryFlags">The directories to search. This parameter can be any combination of the following values.</param>
+            /// <returns>If the function succeeds, the return value is true.</returns>
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+            [SuppressUnmanagedCodeSecurity]
+            public static extern bool SetDefaultDllDirectories(LoadLibrarySearchFlags directoryFlags);
+        }
+
+        /// <summary>
+        /// Flag values for <see cref="UnsafeNativeMethods.SetDefaultDllDirectories(LoadLibrarySearchFlags)"/>.
+        /// </summary>
+        [Flags]
+        internal enum LoadLibrarySearchFlags
+        {
+            /// <summary>
+            /// If this value is used, the application's installation directory is searched.
+            /// </summary>
+            ApplicationDir = 0x00000200,
+            /// <summary>
+            /// <para>If this value is used, any path explicitly added using the AddDllDirectory or SetDllDirectory function is searched.</para>
+            /// <para>If more than one directory has been added, the order in which those directories are searched is unspecified.</para>
+            /// </summary>
+            UserDirs = 0x00000400,
+            /// <summary>
+            /// If this value is used, %windows%\system32 is searched.
+            /// </summary>
+            System32 = 0x00000800,
+            /// <summary>
+            /// <para>This value is a combination of <see cref="ApplicationDir"/>, <see cref="System32"/>, and <see cref="UserDirs"/>.</para>
+            /// <para>This value represents the recommended maximum number of directories an application should include in its DLL search path.</para>
+            /// </summary>
+            DefaultDirs = 0x00001000
         }
     }
 }
