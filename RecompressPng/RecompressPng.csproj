@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0-windows</TargetFramework>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
