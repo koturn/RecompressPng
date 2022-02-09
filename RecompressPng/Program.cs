@@ -1644,6 +1644,8 @@ namespace RecompressPng
 
             if (bd1.Stride != bd2.Stride)
             {
+                img2.UnlockBits(bd2);
+                img1.UnlockBits(bd1);
                 return new CompareResult(CompareResultType.DifferentStride, $"{bd1.Stride} -> {bd2.Stride}");
             }
 
