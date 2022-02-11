@@ -1240,7 +1240,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a zip signature, otherwise false.</returns>
-        private static bool HasZipSignature(Span<byte> data)
+        private static bool HasZipSignature(ReadOnlySpan<byte> data)
         {
             return data.Length >= 4
                 && data[0] == 'P'
@@ -1264,7 +1264,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
-        private static bool HasPngSignature(Span<byte> data)
+        private static bool HasPngSignature(ReadOnlySpan<byte> data)
         {
             if (data.Length < PngSignature.Length)
             {
@@ -1306,7 +1306,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
-        private static bool HasGltfMagic(Span<byte> data)
+        private static bool HasGltfMagic(ReadOnlySpan<byte> data)
         {
             if (data.Length < GltfMagicBytes.Length)
             {
@@ -1330,7 +1330,7 @@ namespace RecompressPng
         /// <param name="pngData">Source PNG data.</param>
         /// <param name="execOptions">Options for execution.</param>
         /// <returns>Modified PNG data.</returns>
-        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions)
+        private static Span<byte> AddAdditionalChunks(ReadOnlySpan<byte> pngData, ExecuteOptions execOptions)
         {
             return AddAdditionalChunks(pngData, execOptions, null);
         }
@@ -1342,7 +1342,7 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
         /// <returns>Modified PNG data.</returns>
-        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions, DateTime? createTime)
+        private static Span<byte> AddAdditionalChunks(ReadOnlySpan<byte> pngData, ExecuteOptions execOptions, DateTime? createTime)
         {
             using var oms = new MemoryStream(pngData.Length
                 + (execOptions.IdatSize > 0 ? (pngData.Length / execOptions.IdatSize - 1) * 12 : 0)
@@ -1509,7 +1509,7 @@ namespace RecompressPng
         /// <param name="data">The data to write.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <param name="timestamp">Timestamp for new entry.</param>
-        private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, Span<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
+        private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, ReadOnlySpan<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
         {
             if (lockObj == null)
             {

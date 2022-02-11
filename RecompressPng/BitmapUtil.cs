@@ -33,7 +33,7 @@ namespace RecompressPng
         /// <param name="imgData1">First image data.</param>
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        public static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
+        public static CompareResult CompareImage(byte[] imgData1, ReadOnlySpan<byte> imgData2)
         {
             // The only way the two PNG data will be the same is
             // if they are recompressed with the same parameters.
@@ -54,7 +54,7 @@ namespace RecompressPng
         /// <param name="imgData1">First image data.</param>
         /// <param name="imgData2">Second image data.</param>
         /// <returns>True if two image data are same, otherwise false.</returns>
-        public static CompareResult CompareImage(Span<byte> imgData1, Span<byte> imgData2)
+        public static CompareResult CompareImage(ReadOnlySpan<byte> imgData1, ReadOnlySpan<byte> imgData2)
         {
             // The only way the two PNG data will be the same is
             // if they are recompressed with the same parameters.
@@ -180,7 +180,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="imgData">Image data.</param>
         /// <returns><see cref="Bitmap"/> instance.</returns>
-        public static unsafe Bitmap CreateBitmap(Span<byte> imgData)
+        public static unsafe Bitmap CreateBitmap(ReadOnlySpan<byte> imgData)
         {
             fixed (byte* p = imgData)
             {

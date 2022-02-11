@@ -158,7 +158,7 @@ namespace RecompressPng
         /// <param name="data1">First byte data span.</param>
         /// <param name="data2">Second byte data span.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
-        public bool CompareMemory(Span<byte> data1, Span<byte> data2)
+        public bool CompareMemory(ReadOnlySpan<byte> data1, ReadOnlySpan<byte> data2)
         {
             if (data1.Length != data2.Length)
             {

@@ -221,7 +221,7 @@ namespace RecompressPng
         /// <param name="type">Chunk type string.</param>
         /// <param name="data">Chunk data.</param>
         /// <param name="crc32">CRC-32 value.</param>
-        private static void VerifyCrc32(string type, Span<byte> data, uint crc32)
+        private static void VerifyCrc32(string type, ReadOnlySpan<byte> data, uint crc32)
         {
             VerifyCrc32(Encoding.ASCII.GetBytes(type), data, crc32, type);
         }
@@ -233,7 +233,7 @@ namespace RecompressPng
         /// <param name="data">Chunk data.</param>
         /// <param name="crc32">CRC-32 value.</param>
         /// <param name="type">Chunk type string.</param>
-        private static void VerifyCrc32(Span<byte> typeData, Span<byte> data, uint crc32, string type)
+        private static void VerifyCrc32(ReadOnlySpan<byte> typeData, ReadOnlySpan<byte> data, uint crc32, string type)
         {
             var expectedCrc32 = ComputeCrc32(typeData, data);
             if (expectedCrc32 != crc32)
@@ -248,7 +248,7 @@ namespace RecompressPng
         /// <param name="type">Chunk type string.</param>
         /// <param name="data">Chunk data.</param>
         /// <returns>Computed CRC-32 value.</returns>
-        private static uint ComputeCrc32(string type, Span<byte> data)
+        private static uint ComputeCrc32(string type, ReadOnlySpan<byte> data)
         {
             return ComputeCrc32(Encoding.ASCII.GetBytes(type), data);
         }
@@ -259,7 +259,7 @@ namespace RecompressPng
         /// <param name="typeData">ASCII byte data of Chunk type string.</param>
         /// <param name="data">Chunk data.</param>
         /// <returns>Computed CRC-32 value.</returns>
-        private static uint ComputeCrc32(Span<byte> typeData, Span<byte> data)
+        private static uint ComputeCrc32(ReadOnlySpan<byte> typeData, ReadOnlySpan<byte> data)
         {
             return Crc32Calculator.Finalize(Crc32Calculator.Update(data, Crc32Calculator.Update(typeData)));
         }
