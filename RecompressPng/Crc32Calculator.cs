@@ -101,7 +101,7 @@ namespace RecompressPng
         /// <returns>Updated intermidiate CRC-32 value.</returns>
         public static uint Update(byte x, uint crc = 0xffffffff)
         {
-            return GetTable()[(crc ^ (x & 0xff)) & 0xff] ^ (crc >> 8);
+            return GetTable()[(crc ^ x) & 0xff] ^ (crc >> 8);
         }
 
         /// <summary>
