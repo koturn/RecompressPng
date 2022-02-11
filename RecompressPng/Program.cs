@@ -272,7 +272,7 @@ namespace RecompressPng
 
             // Check DateTime format of Creation Time
             var isAddCt = ap.GetValue<bool>("add-text-creation-time");
-            string ctFormat = null;
+            string? ctFormat = null;
             if (isAddCt)
             {
                 ctFormat = ap.GetValue("creation-time-format");
@@ -414,10 +414,10 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetDirectoryName(srcZipFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             if (File.Exists(dstZipFilePath))
@@ -617,10 +617,10 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetDirectoryName(srcZipFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             File.Copy(srcZipFilePath, dstZipFilePath, true);
@@ -795,10 +795,10 @@ namespace RecompressPng
         /// <param name="dstVrmFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInVrm(string srcVrmFilePath, string dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInVrm(string srcVrmFilePath, string? dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstVrmFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcVrmFilePath),
+                Path.GetDirectoryName(srcVrmFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
 
             if (File.Exists(dstVrmFilePath))
@@ -912,7 +912,8 @@ namespace RecompressPng
 
                 glbChunks[1].Length = nOffset;
                 glbChunks[0].Data = Encoding.UTF8.GetBytes(gltfJson.ToString());
-                glbChunks[0].Length = glbChunks[0].Data.Length;
+                var data = glbChunks[0].Data;
+                glbChunks[0].Length = data == null ? 0 : data.Length;
                 glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
 
                 using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
@@ -987,7 +988,7 @@ namespace RecompressPng
         /// <param name="dstDirPath">Destination directory.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInDirectory(string srcDirPath, string? dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstDirPath ??= (srcDirPath + ".zopfli");
 
@@ -1042,7 +1043,7 @@ namespace RecompressPng
 
                         if (!execOptions.IsDryRun)
                         {
-                            Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                            Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath) ?? ".");
                             var isWritten = true;
                             if (isReplace || execOptions.IsModifyPng)
                             {
@@ -1508,8 +1509,16 @@ namespace RecompressPng
         /// <param name="data">The data to write.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <param name="timestamp">Timestamp for new entry.</param>
-        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, Span<byte> data, object lockObj, DateTimeOffset? timestamp = null)
+        private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, Span<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
         {
+            if (lockObj == null)
+            {
+                throw new ArgumentNullException(nameof(lockObj));
+            }
+            if (archive == null)
+            {
+                throw new ArgumentNullException(nameof(archive));
+            }
             lock (lockObj)
             {
                 var dstEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);

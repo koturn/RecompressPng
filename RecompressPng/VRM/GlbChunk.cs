@@ -20,7 +20,7 @@ namespace RecompressPng.VRM
         /// <summary>
         /// Chunk data.
         /// </summary>
-        public byte[] Data { get; set; }
+        public byte[]? Data { get; set; }
 
         /// <summary>
         /// Initialize all properties.
@@ -44,7 +44,10 @@ namespace RecompressPng.VRM
             using var bw = new BinaryWriter(stream, Encoding.Default, true);
             bw.Write(Length);
             bw.Write(ChunkType);
-            bw.Write(Data);
+            if (Data != null)
+            {
+                bw.Write(Data);
+            }
         }
     }
 }

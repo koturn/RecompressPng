@@ -13,7 +13,7 @@
         /// <summary>
         /// Optional message of comparison.
         /// </summary>
-        public string OptionalMessage { get; set; }
+        public string? OptionalMessage { get; set; }
 
         /// <summary>
         /// Initialize all properties.
@@ -29,7 +29,7 @@
         /// </summary>
         /// <param name="type">Type of comparison result.</param>
         /// <param name="optionalMessage">Optional message of comparison.</param>
-        public CompareResult(CompareResultType type, string optionalMessage)
+        public CompareResult(CompareResultType type, string? optionalMessage)
         {
             Type = type;
             OptionalMessage = optionalMessage;

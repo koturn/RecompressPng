@@ -51,14 +51,24 @@ namespace RecompressPng.VRM
         /// </summary>
         public static (JsonValue GltfJson, List<byte[]> BinaryBuffers, List<ImageIndex> ImageIndexes) ParseGltf(List<GlbChunk> glbChunks)
         {
-            var gltfJson = LoadJson(glbChunks[0].Data);
+            var data0 = glbChunks[0].Data;
+            if (data0 == null)
+            {
+                throw new ArgumentNullException(nameof(data0), "First GLB chunk data is null.");
+            }
+            var gltfJson = LoadJson(data0);
             var bufferViews = (JsonArray)gltfJson["bufferViews"];
 
+            var data1 = glbChunks[1].Data;
+            if (data1 == null)
+            {
+                throw new ArgumentNullException(nameof(data1), "Second GLB chunk data is null.");
+            }
             var binaryBuffers = new List<byte[]>(bufferViews.Count);
             binaryBuffers.AddRange(bufferViews.Select(bv =>
             {
                 var buffer = new byte[bv["byteLength"]];
-                Array.Copy(glbChunks[1].Data, bv["byteOffset"], buffer, 0, buffer.Length);
+                Array.Copy(data1, bv["byteOffset"], buffer, 0, buffer.Length);
 
                 return buffer;
             }));

@@ -37,7 +37,7 @@ namespace RecompressPng
         /// <para>Format string of <see cref="System.DateTime"/> for value of Creation Time of tEXt chunk.</para>
         /// <para><c>null</c> or empty string means don't add Creation Time.</para>
         /// </summary>
-        public string TextCreationTimeFormat { get; set; }
+        public string? TextCreationTimeFormat { get; set; }
         /// <summary>
         /// Whether add tIME chunk or not.
         /// </summary>
@@ -101,7 +101,7 @@ namespace RecompressPng
             bool isReplaceForce = false,
             bool isKeepTimestamp = true,
             int idatSize = -1,
-            string textCreationTimeFormat = null,
+            string? textCreationTimeFormat = null,
             bool isAddTimeChunk = false,
             bool isCopyAndShrinkZip = false,
             bool isDryRun = false,

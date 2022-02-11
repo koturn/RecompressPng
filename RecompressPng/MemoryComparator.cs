@@ -2,6 +2,7 @@
 #    define NET_SIMD
 #endif  // NETCOREAPP3_0_OR_GREATER
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Security;
 
@@ -47,7 +48,7 @@ namespace RecompressPng
         /// <summary>
         /// Delegate of memory comparison method.
         /// </summary>
-        private CompareMemoryDelegate _compareMemory;
+        private CompareMemoryDelegate? _compareMemory;
 
 
         /// <summary>
@@ -184,6 +185,11 @@ namespace RecompressPng
         /// <returns>True if two byte data is same, otherwise false.</returns>
         public bool CompareMemory(IntPtr pData1, IntPtr pData2, long dataLength)
         {
+            if (_compareMemory == null)
+            {
+                ThrowArgumentNullException(nameof(_compareMemory), "This instance was already disposed.");
+                return false;
+            }
             return _compareMemory(pData1, pData2, (UIntPtr)dataLength);
         }
 
@@ -627,5 +633,18 @@ namespace RecompressPng
                 });
         }
 #endif  // NET_SIMD
+
+
+        /// <summary>
+        /// Throw <see cref="ArgumentNullException"/>.
+        /// </summary>
+        /// <param name="paramName">The name of the parameter that caused the exception.</param>
+        /// <param name="message">A message that describes the error.</param>
+        /// <exception cref="ArgumentNullException">Always thrown.</exception>
+        [DoesNotReturn]
+        private static void ThrowArgumentNullException(string paramName, string message)
+        {
+            throw new ArgumentNullException(paramName, message);
+        }
     }
 }

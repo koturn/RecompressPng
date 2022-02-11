@@ -11,7 +11,7 @@ namespace RecompressPng
         /// <summary>
         /// Cache of CRC-32 table.
         /// </summary>
-        private static uint[] _table;
+        private static uint[]? _table;
 
         /// <summary>
         /// Compute CRC-32 value.
