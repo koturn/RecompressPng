@@ -1473,13 +1473,13 @@ namespace RecompressPng
         /// <returns>Read data.</returns>
         private static byte[] ReadAllBytes(ZipArchiveEntry entry, object lockObj)
         {
-            var data = new byte[entry.Length];
+            using var ms = new MemoryStream((int)entry.Length);
             lock (lockObj)
             {
                 using var zs = entry.Open();
-                zs.Read(data, 0, data.Length);
+                zs.CopyTo(ms);
             }
-            return data;
+            return ms.Length == entry.Length ? ms.GetBuffer() : ms.ToArray();
         }
 
         /// <summary>
