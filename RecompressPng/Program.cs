@@ -332,36 +332,19 @@ namespace RecompressPng
         {
             foreach (var c in filterStrategiesString)
             {
-                switch (c)
+                yield return c switch
                 {
-                    case '0':
-                        yield return ZopfliPNGFilterStrategy.Zero;
-                        break;
-                    case '1':
-                        yield return ZopfliPNGFilterStrategy.One;
-                        break;
-                    case '2':
-                        yield return ZopfliPNGFilterStrategy.Two;
-                        break;
-                    case '3':
-                        yield return ZopfliPNGFilterStrategy.Three;
-                        break;
-                    case '4':
-                        yield return ZopfliPNGFilterStrategy.Four;
-                        break;
-                    case 'm':
-                        yield return ZopfliPNGFilterStrategy.MinSum;
-                        break;
-                    case 'e':
-                        yield return ZopfliPNGFilterStrategy.Entropy;
-                        break;
-                    case 'p':
-                        yield return ZopfliPNGFilterStrategy.Predefined;
-                        break;
-                    case 'b':
-                        yield return ZopfliPNGFilterStrategy.BruteForce;
-                        break;
-                }
+                    '0' => ZopfliPNGFilterStrategy.Zero,
+                    '1' => ZopfliPNGFilterStrategy.One,
+                    '2' => ZopfliPNGFilterStrategy.Two,
+                    '3' => ZopfliPNGFilterStrategy.Three,
+                    '4' => ZopfliPNGFilterStrategy.Four,
+                    'm' => ZopfliPNGFilterStrategy.MinSum,
+                    'e' => ZopfliPNGFilterStrategy.Entropy,
+                    'p' => ZopfliPNGFilterStrategy.Predefined,
+                    'b' => ZopfliPNGFilterStrategy.BruteForce,
+                    _ => throw new ArgumentException($"Invalid filter strategy character is specified: {c}", nameof(filterStrategiesString))
+                };
             }
         }
 
