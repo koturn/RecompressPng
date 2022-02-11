@@ -506,7 +506,7 @@ namespace RecompressPng
                                 execOptions.Verbose);
 
                             var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                                ? CreateSpan(compressedData)
+                                ? SpanUtil.CreateSpan(compressedData)
                                 : data.AsSpan();
                             if (execOptions.IsModifyPng)
                             {
@@ -679,7 +679,7 @@ namespace RecompressPng
                                 execOptions.Verbose);
 
                             var isUpdateNeeded = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
-                            var pngDataSpan = isUpdateNeeded ? CreateSpan(compressedData) : data.AsSpan(0, dataLength);
+                            var pngDataSpan = isUpdateNeeded ? SpanUtil.CreateSpan(compressedData) : data.AsSpan(0, dataLength);
                             if (execOptions.IsModifyPng)
                             {
                                 isUpdateNeeded = true;
@@ -857,7 +857,7 @@ namespace RecompressPng
                             execOptions.Verbose);
 
                         var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                            ? CreateSpan(compressedData)
+                            ? SpanUtil.CreateSpan(compressedData)
                             : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
@@ -1045,7 +1045,7 @@ namespace RecompressPng
                             execOptions.Verbose);
 
                         var isReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
-                        var pngDataSpan = isReplace ? CreateSpan(compressedData) : data.AsSpan();
+                        var pngDataSpan = isReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
                             pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, originalTimestamp);
@@ -1366,7 +1366,7 @@ namespace RecompressPng
                     AddAdditionalChunks(ims, oms, execOptions, createTime);
                 }
             }
-            return oms.GetBuffer().AsSpan(0, (int)oms.Length);
+            return SpanUtil.CreateSpan(oms);
         }
 
         /// <summary>
@@ -1473,16 +1473,6 @@ namespace RecompressPng
             return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
                 .MakeRelativeUri(new Uri(Path.GetFullPath(targetPath))).ToString())
                 .Replace('/', '\\');
-        }
-
-        /// <summary>
-        /// Create <see cref="Span{T}"/> from <see cref="SafeBuffer"/>.
-        /// </summary>
-        /// <param name="sb">An instance of <see cref="SafeBuffer"/>.</param>
-        /// <returns><see cref="Span{T}"/> of <paramref name="sb"/>.</returns>
-        private static unsafe Span<byte> CreateSpan(SafeBuffer sb)
-        {
-            return new Span<byte>((void*)sb.DangerousGetHandle(), (int)sb.ByteLength);
         }
 
         /// <summary>
