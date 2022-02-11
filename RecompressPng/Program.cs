@@ -3,8 +3,6 @@ using System.Buffers.Binary;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -66,10 +64,6 @@ namespace RecompressPng
         /// All chunks to keep when "--keep-all-chunks" specified.
         /// </summary>
         private static readonly string[] AllChunks;
-        /// <summary>
-        /// Memory comparator.
-        /// </summary>
-        private static MemoryComparator _memoryComparator;
 
 
         /// <summary>
@@ -110,7 +104,6 @@ namespace RecompressPng
                 var (target, pngOptions, execOptions) = ParseCommadLineArguments(args);
                 ShowParameters(pngOptions, execOptions);
 
-                _memoryComparator = new MemoryComparator();
                 if (File.Exists(target))
                 {
                     if (IsZipFile(target))
@@ -181,10 +174,6 @@ namespace RecompressPng
             {
                 _logger.Fatal(ex, "An exception occured:");
                 return 1;
-            }
-            finally
-            {
-                _memoryComparator?.Dispose();
             }
         }
 
@@ -288,7 +277,7 @@ namespace RecompressPng
 
             // Check DateTime format of Creation Time
             var isAddCt = ap.GetValue<bool>("add-text-creation-time");
-            string ctFormat = null;
+            string? ctFormat = null;
             if (isAddCt)
             {
                 ctFormat = ap.GetValue("creation-time-format");
@@ -432,10 +421,10 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetDirectoryName(srcZipFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             if (File.Exists(dstZipFilePath))
@@ -513,7 +502,7 @@ namespace RecompressPng
                                 execOptions.Verbose);
 
                             var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                                ? CreateSpan(compressedData)
+                                ? SpanUtil.CreateSpan(compressedData)
                                 : data.AsSpan();
                             if (execOptions.IsModifyPng)
                             {
@@ -534,7 +523,7 @@ namespace RecompressPng
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
-                                var result = CompareImage(data, pngDataSpan);
+                                var result = BitmapUtil.CompareImage(data, pngDataSpan);
                                 verifyResultMsg = $" ({result})";
                                 if (result.Type != CompareResultType.Same)
                                 {
@@ -635,10 +624,10 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcZipFilePath),
+                Path.GetDirectoryName(srcZipFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcZipFilePath) + ".zopfli" + Path.GetExtension(srcZipFilePath));
 
             File.Copy(srcZipFilePath, dstZipFilePath, true);
@@ -686,7 +675,7 @@ namespace RecompressPng
                                 execOptions.Verbose);
 
                             var isUpdateNeeded = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
-                            var pngDataSpan = isUpdateNeeded ? CreateSpan(compressedData) : data.AsSpan(0, dataLength);
+                            var pngDataSpan = isUpdateNeeded ? SpanUtil.CreateSpan(compressedData) : data.AsSpan(0, dataLength);
                             if (execOptions.IsModifyPng)
                             {
                                 isUpdateNeeded = true;
@@ -711,7 +700,7 @@ namespace RecompressPng
                             var verifyResultMsg = "";
                             if (execOptions.IsVerifyImage)
                             {
-                                var result = CompareImage(data.AsSpan(0, dataLength), pngDataSpan);
+                                var result = BitmapUtil.CompareImage(data.AsSpan(0, dataLength), pngDataSpan);
                                 verifyResultMsg = $" ({result})";
                                 if (result.Type != CompareResultType.Same)
                                 {
@@ -813,10 +802,10 @@ namespace RecompressPng
         /// <param name="dstVrmFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInVrm(string srcVrmFilePath, string dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInVrm(string srcVrmFilePath, string? dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstVrmFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcVrmFilePath),
+                Path.GetDirectoryName(srcVrmFilePath) ?? ".",
                 Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
 
             if (File.Exists(dstVrmFilePath))
@@ -864,7 +853,7 @@ namespace RecompressPng
                             execOptions.Verbose);
 
                         var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                            ? CreateSpan(compressedData)
+                            ? SpanUtil.CreateSpan(compressedData)
                             : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
@@ -880,7 +869,7 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var result = CompareImage(data, pngDataSpan);
+                            var result = BitmapUtil.CompareImage(data, pngDataSpan);
                             verifyResultMsg = $" ({result})";
                             if (result.Type != CompareResultType.Same)
                             {
@@ -930,7 +919,8 @@ namespace RecompressPng
 
                 glbChunks[1].Length = nOffset;
                 glbChunks[0].Data = Encoding.UTF8.GetBytes(gltfJson.ToString());
-                glbChunks[0].Length = glbChunks[0].Data.Length;
+                var data = glbChunks[0].Data;
+                glbChunks[0].Length = data == null ? 0 : data.Length;
                 glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
 
                 using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
@@ -1005,7 +995,7 @@ namespace RecompressPng
         /// <param name="dstDirPath">Destination directory.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInDirectory(string srcDirPath, string? dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
             dstDirPath ??= (srcDirPath + ".zopfli");
 
@@ -1052,7 +1042,7 @@ namespace RecompressPng
                             execOptions.Verbose);
 
                         var isReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
-                        var pngDataSpan = isReplace ? CreateSpan(compressedData) : data.AsSpan();
+                        var pngDataSpan = isReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
                             pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, originalTimestamp);
@@ -1060,7 +1050,7 @@ namespace RecompressPng
 
                         if (!execOptions.IsDryRun)
                         {
-                            Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath));
+                            Directory.CreateDirectory(Path.GetDirectoryName(dstFilePath) ?? ".");
                             var isWritten = true;
                             if (isReplace || execOptions.IsModifyPng)
                             {
@@ -1089,7 +1079,7 @@ namespace RecompressPng
                         var verifyResultMsg = "";
                         if (execOptions.IsVerifyImage)
                         {
-                            var result = CompareImage(data, pngDataSpan);
+                            var result = BitmapUtil.CompareImage(data, pngDataSpan);
                             verifyResultMsg = $" ({result})";
                             if (result.Type != CompareResultType.Same)
                             {
@@ -1257,7 +1247,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a zip signature, otherwise false.</returns>
-        private static bool HasZipSignature(Span<byte> data)
+        private static bool HasZipSignature(ReadOnlySpan<byte> data)
         {
             return data.Length >= 4
                 && data[0] == 'P'
@@ -1281,7 +1271,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
-        private static bool HasPngSignature(Span<byte> data)
+        private static bool HasPngSignature(ReadOnlySpan<byte> data)
         {
             if (data.Length < PngSignature.Length)
             {
@@ -1323,7 +1313,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="data">Binary data</param>
         /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
-        private static bool HasGltfMagic(Span<byte> data)
+        private static bool HasGltfMagic(ReadOnlySpan<byte> data)
         {
             if (data.Length < GltfMagicBytes.Length)
             {
@@ -1347,7 +1337,7 @@ namespace RecompressPng
         /// <param name="pngData">Source PNG data.</param>
         /// <param name="execOptions">Options for execution.</param>
         /// <returns>Modified PNG data.</returns>
-        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions)
+        private static Span<byte> AddAdditionalChunks(ReadOnlySpan<byte> pngData, ExecuteOptions execOptions)
         {
             return AddAdditionalChunks(pngData, execOptions, null);
         }
@@ -1359,7 +1349,7 @@ namespace RecompressPng
         /// <param name="execOptions">Options for execution.</param>
         /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
         /// <returns>Modified PNG data.</returns>
-        private static Span<byte> AddAdditionalChunks(Span<byte> pngData, ExecuteOptions execOptions, DateTime? createTime)
+        private static Span<byte> AddAdditionalChunks(ReadOnlySpan<byte> pngData, ExecuteOptions execOptions, DateTime? createTime)
         {
             using var oms = new MemoryStream(pngData.Length
                 + (execOptions.IdatSize > 0 ? (pngData.Length / execOptions.IdatSize - 1) * 12 : 0)
@@ -1373,7 +1363,7 @@ namespace RecompressPng
                     AddAdditionalChunks(ims, oms, execOptions, createTime);
                 }
             }
-            return oms.GetBuffer().AsSpan(0, (int)oms.Length);
+            return SpanUtil.CreateSpan(oms);
         }
 
         /// <summary>
@@ -1483,16 +1473,6 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Create <see cref="Span{T}"/> from <see cref="SafeBuffer"/>.
-        /// </summary>
-        /// <param name="sb">An instance of <see cref="SafeBuffer"/>.</param>
-        /// <returns><see cref="Span{T}"/> of <paramref name="sb"/>.</returns>
-        private static unsafe Span<byte> CreateSpan(SafeBuffer sb)
-        {
-            return new Span<byte>((void*)sb.DangerousGetHandle(), (int)sb.ByteLength);
-        }
-
-        /// <summary>
         /// Read all data from <see cref="ZipArchiveEntry"/>.
         /// </summary>
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
@@ -1536,8 +1516,16 @@ namespace RecompressPng
         /// <param name="data">The data to write.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <param name="timestamp">Timestamp for new entry.</param>
-        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, Span<byte> data, object lockObj, DateTimeOffset? timestamp = null)
+        private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, ReadOnlySpan<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
         {
+            if (lockObj == null)
+            {
+                throw new ArgumentNullException(nameof(lockObj));
+            }
+            if (archive == null)
+            {
+                throw new ArgumentNullException(nameof(archive));
+            }
             lock (lockObj)
             {
                 var dstEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
@@ -1569,188 +1557,6 @@ namespace RecompressPng
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
             return 1.0 - (double)compressedSize / originalSize;
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(byte[] imgData1, Span<byte> imgData2)
-        {
-            // The only way the two PNG data will be the same is
-            // if they are recompressed with the same parameters.
-            if (_memoryComparator.CompareMemory(imgData1, imgData2))
-            {
-                return new CompareResult(CompareResultType.Same);
-            }
-
-            using var bmp1 = CreateBitmap(imgData1);
-            using var bmp2 = CreateBitmap(imgData2);
-
-            return CompareImage(bmp1, bmp2);
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="imgData1">First image data.</param>
-        /// <param name="imgData2">Second image data.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(Span<byte> imgData1, Span<byte> imgData2)
-        {
-            // The only way the two PNG data will be the same is
-            // if they are recompressed with the same parameters.
-            if (_memoryComparator.CompareMemory(imgData1, imgData2))
-            {
-                return new CompareResult(CompareResultType.Same);
-            }
-
-            using var bmp1 = CreateBitmap(imgData1);
-            using var bmp2 = CreateBitmap(imgData2);
-
-            return CompareImage(bmp1, bmp2);
-        }
-
-        /// <summary>
-        /// Compare and determine two image data is same or not.
-        /// </summary>
-        /// <param name="img1">First image data.</param>
-        /// <param name="img2">Second image data.</param>
-        /// <returns>True if two image data are same, otherwise false.</returns>
-        private static CompareResult CompareImage(Bitmap img1, Bitmap img2)
-        {
-            if (img1.Width != img2.Width)
-            {
-                return new CompareResult(CompareResultType.DifferentWidth, $"{img1.Width} -> {img2.Width}");
-            }
-            if (img1.Height != img2.Height)
-            {
-                return new CompareResult(CompareResultType.DifferentHeight, $"{img1.Height} -> {img2.Height}");
-            }
-            if (img1.PixelFormat != img2.PixelFormat)
-            {
-                return CompareImageByPixel(img1, img2)
-                    ? new CompareResult(CompareResultType.SameButDifferentPixelFormat, $"{img1.PixelFormat} -> {img2.PixelFormat}")
-                    : new CompareResult(CompareResultType.DifferentImageData);
-            }
-            if ((img1.PixelFormat & PixelFormat.Indexed) != 0)
-            {
-                return new CompareResult(CompareImageByPixel(img1, img2) ? CompareResultType.Same : CompareResultType.DifferentImageData);
-            }
-
-            var bd1 = img1.LockBits(
-                new Rectangle(0, 0, img1.Width, img1.Height),
-                ImageLockMode.ReadOnly,
-                img1.PixelFormat);
-            var bd2 = img2.LockBits(
-                new Rectangle(0, 0, img2.Width, img2.Height),
-                ImageLockMode.ReadOnly,
-                img2.PixelFormat);
-
-            if (bd1.Stride != bd2.Stride)
-            {
-                return new CompareResult(CompareResultType.DifferentStride, $"{bd1.Stride} -> {bd2.Stride}");
-            }
-
-            var isSameImageData = _memoryComparator.CompareMemory(bd1.Scan0, bd2.Scan0, bd1.Height * bd1.Stride);
-
-            img2.UnlockBits(bd2);
-            img1.UnlockBits(bd1);
-
-            return new CompareResult(isSameImageData ? CompareResultType.Same : CompareResultType.DifferentImageData);
-        }
-
-        /// <summary>
-        /// Compare the two images pixel by pixel.
-        /// </summary>
-        /// <param name="img1">First image data.</param>
-        /// <param name="img2">Second image data.</param>
-        /// <returns><c>true</c> if two images are same, otherwise <c>false</c>.</returns>
-        private static bool CompareImageByPixel(Bitmap img1, Bitmap img2)
-        {
-            if (img1.Width != img2.Width)
-            {
-                return false;
-            }
-            if (img1.Height != img2.Height)
-            {
-                return false;
-            }
-
-            var height = img1.Height;
-            var width = img1.Width;
-            for (int i = 0; i < height; i++)
-            {
-                for (int j = 0; j < width; j++)
-                {
-                    if (img1.GetPixel(j, i) != img2.GetPixel(j, i))
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Convert <see cref="Bitmap"/> instance from image data.
-        /// </summary>
-        /// <param name="imgData">Image data.</param>
-        /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmap(byte[] imgData)
-        {
-            return CreateBitmap(imgData, imgData.LongLength);
-        }
-
-        /// <summary>
-        /// Convert <see cref="Bitmap"/> instance from image data.
-        /// </summary>
-        /// <param name="imgData">Image data.</param>
-        /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
-        /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmap(byte[] imgData, long imgDataLength)
-        {
-            using var ms = new MemoryStream(imgData, 0, (int)imgDataLength, false, false);
-            return (Bitmap)Image.FromStream(ms);
-        }
-
-        /// <summary>
-        /// Convert <see cref="Bitmap"/> instance from image data.
-        /// </summary>
-        /// <param name="imgData">Image data.</param>
-        /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static unsafe Bitmap CreateBitmap(Span<byte> imgData)
-        {
-            fixed (byte* p = imgData)
-            {
-                using var ms = new UnmanagedMemoryStream(p, imgData.Length);
-                return (Bitmap)Image.FromStream(ms);
-            }
-        }
-
-        /// <summary>
-        /// Convert <see cref="Bitmap"/> instance from image data.
-        /// </summary>
-        /// <param name="imgData">Image data.</param>
-        /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmap(SafeBuffer imgData)
-        {
-            return CreateBitmap(imgData, (long)imgData.ByteLength);
-        }
-
-        /// <summary>
-        /// Convert <see cref="Bitmap"/> instance from image data.
-        /// </summary>
-        /// <param name="imgData">Image data.</param>
-        /// <param name="imgDataLength">Byte length of <paramref name="imgData"/>.</param>
-        /// <returns><see cref="Bitmap"/> instance.</returns>
-        private static Bitmap CreateBitmap(SafeBuffer imgData, long imgDataLength)
-        {
-            using var ms = new UnmanagedMemoryStream(imgData, 0, (int)imgDataLength);
-            return (Bitmap)Image.FromStream(ms);
         }
 
         /// <summary>

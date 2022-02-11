@@ -1,8 +1,13 @@
-﻿namespace RecompressPng
+﻿using System;
+using System.Drawing;
+
+
+namespace RecompressPng
 {
     /// <summary>
-    /// Result of image comparison methods, <see cref="Program.CompareImage(byte[], System.Span{byte})"/>
-    /// and <see cref="Program.CompareImage(System.Drawing.Bitmap, System.Drawing.Bitmap)"/>.
+    /// Result of image comparison methods, <see cref="BitmapUtil.CompareImage(byte[], ReadOnlySpan{byte})"/>
+    /// and <see cref="BitmapUtil.CompareImage(Bitmap, Bitmap)"/>
+    /// and <see cref="BitmapUtil.CompareImage(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>.
     /// </summary>
     public struct CompareResult
     {
@@ -13,7 +18,7 @@
         /// <summary>
         /// Optional message of comparison.
         /// </summary>
-        public string OptionalMessage { get; set; }
+        public string? OptionalMessage { get; set; }
 
         /// <summary>
         /// Initialize all properties.
@@ -29,7 +34,7 @@
         /// </summary>
         /// <param name="type">Type of comparison result.</param>
         /// <param name="optionalMessage">Optional message of comparison.</param>
-        public CompareResult(CompareResultType type, string optionalMessage)
+        public CompareResult(CompareResultType type, string? optionalMessage)
         {
             Type = type;
             OptionalMessage = optionalMessage;
@@ -66,8 +71,7 @@
     }
 
     /// <summary>
-    /// Result of image comparison methods, <see cref="ProgCompareImage(byte[], Span{byte})"/>
-    /// and <see cref="CompareImage(Bitmap, Bitmap)"/>.
+    /// Result type of image comparison.
     /// </summary>
     public enum CompareResultType
     {

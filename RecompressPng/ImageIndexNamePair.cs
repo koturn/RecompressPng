@@ -29,10 +29,10 @@
         /// Store <see cref="Index"/> and <see cref="ImageName"/> to specified variable.
         /// </summary>
         /// <param name="index">A variable where <see cref="Index"/> is stored.</param>
-        /// <param name="imageName">A variable where <see cref="imageName"/> is stored.</param>
+        /// <param name="imageName">A variable where <see cref="ImageName"/> is stored.</param>
         public void Deconstruct(out int index, out string imageName)
         {
-            index = Index; ;
+            index = Index;
             imageName = ImageName;
         }
     }
