@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -448,7 +449,7 @@ namespace RecompressPng
                 }
 
                 Parallel.ForEach(
-                    srcArchive.Entries,
+                    Partitioner.Create(srcArchive.Entries, true),
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
@@ -620,7 +621,7 @@ namespace RecompressPng
                 var deleteEntryList = new List<ZipArchiveEntry>();
 
                 Parallel.ForEach(
-                    zipArchive.Entries,
+                    Partitioner.Create(zipArchive.Entries, true),
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
@@ -805,7 +806,7 @@ namespace RecompressPng
             execOptions.IsAddTimeChunk = false;
 
             Parallel.ForEach(
-                imageIndexes,
+                Partitioner.Create(imageIndexes, true),
                 new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                 imageIndex =>
                 {
@@ -987,7 +988,7 @@ namespace RecompressPng
             var totalSw = Stopwatch.StartNew();
 
             Parallel.ForEach(
-                Directory.EnumerateFiles(srcDirPath, "*.png", SearchOption.AllDirectories),
+                Partitioner.Create(Directory.EnumerateFiles(srcDirPath, "*.png", SearchOption.AllDirectories)),
                 new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                 srcFilePath =>
                 {
