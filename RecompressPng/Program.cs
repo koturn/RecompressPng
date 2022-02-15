@@ -719,7 +719,11 @@ namespace RecompressPng
                 }
             }
 
-            if (execOptions.IsOverwrite)
+            if (nProcPngFiles == 0)
+            {
+                File.Delete(dstZipFilePath);
+            }
+            else if (execOptions.IsOverwrite)
             {
                 File.Delete(srcZipFilePath);
                 File.Move(dstZipFilePath, srcZipFilePath);
