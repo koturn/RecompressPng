@@ -1254,14 +1254,15 @@ namespace RecompressPng
         /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
         private static bool HasPngSignature(ReadOnlySpan<byte> data)
         {
-            if (data.Length < PngSignature.Length)
+            var pngSignature = PngSignature;
+            if (data.Length < pngSignature.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < PngSignature.Length; i++)
+            for (int i = 0; i < pngSignature.Length; i++)
             {
-                if (data[i] != PngSignature[i])
+                if (data[i] != pngSignature[i])
                 {
                     return false;
                 }
@@ -1278,7 +1279,7 @@ namespace RecompressPng
         /// <returns>True if specified file is a glTF file, otherwise false.</returns>
         private static bool IsGltfFile(string gltfFilePath)
         {
-            Span<byte> buffer = stackalloc byte[4];
+            Span<byte> buffer = stackalloc byte[GltfMagicBytes.Length];
             using (var fs = File.OpenRead(gltfFilePath))
             {
                 if (fs.Read(buffer) < buffer.Length)
@@ -1296,14 +1297,15 @@ namespace RecompressPng
         /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
         private static bool HasGltfMagic(ReadOnlySpan<byte> data)
         {
-            if (data.Length < GltfMagicBytes.Length)
+            var gltfMagicBytes = GltfMagicBytes;
+            if (data.Length < gltfMagicBytes.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < GltfMagicBytes.Length; i++)
+            for (int i = 0; i < gltfMagicBytes.Length; i++)
             {
-                if (data[i] != GltfMagicBytes[i])
+                if (data[i] != gltfMagicBytes[i])
                 {
                     return false;
                 }
