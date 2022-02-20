@@ -1212,7 +1212,7 @@ namespace RecompressPng
         private static bool IsZipFile(string zipFilePath)
         {
             Span<byte> buffer = stackalloc byte[4];
-            using (var fs = new FileStream(zipFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var fs = File.OpenRead(zipFilePath))
             {
                 if (fs.Read(buffer) < buffer.Length)
                 {
@@ -1279,7 +1279,7 @@ namespace RecompressPng
         private static bool IsGltfFile(string gltfFilePath)
         {
             Span<byte> buffer = stackalloc byte[4];
-            using (var fs = new FileStream(gltfFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var fs = File.OpenRead(gltfFilePath))
             {
                 if (fs.Read(buffer) < buffer.Length)
                 {
