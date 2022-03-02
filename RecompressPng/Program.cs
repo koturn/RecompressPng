@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -210,6 +211,9 @@ namespace RecompressPng
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
+            ap.Add('q', "no-use-zopfli",
+                "Use quick, but not very good, compression.\n"
+                + indent2 + "(e.g. for only trying the PNG filter and color types)");
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
             ap.Add("add-text-creation-time",
@@ -252,7 +256,6 @@ namespace RecompressPng
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-keep-timestamp", "Don't keep timestamp.");
             ap.Add("no-overwrite", "Don't overwrite PNG files and create images to new zip archive file or directory.");
-            ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.Add("no-verify-image", "Don't compare two image data.");
 
             ap.Parse(args);
@@ -296,7 +299,7 @@ namespace RecompressPng
             zo.Lossy8bit = ap.GetValue<bool>("lossy-8bit");
             zo.AutoFilterStrategy = !ap.GetValue<bool>("no-auto-filter-strategy");
             zo.KeepColorType = ap.GetValue<bool>("keep-color-type");
-            zo.UseZopfli = !ap.GetValue<bool>("no-use-zopfli");
+            zo.UseZopfli = !ap.GetValue<bool>('q');
 
             if (ap.HasValue('f'))
             {
@@ -338,36 +341,19 @@ namespace RecompressPng
         {
             foreach (var c in filterStrategiesString)
             {
-                switch (c)
+                yield return c switch
                 {
-                    case '0':
-                        yield return ZopfliPNGFilterStrategy.Zero;
-                        break;
-                    case '1':
-                        yield return ZopfliPNGFilterStrategy.One;
-                        break;
-                    case '2':
-                        yield return ZopfliPNGFilterStrategy.Two;
-                        break;
-                    case '3':
-                        yield return ZopfliPNGFilterStrategy.Three;
-                        break;
-                    case '4':
-                        yield return ZopfliPNGFilterStrategy.Four;
-                        break;
-                    case 'm':
-                        yield return ZopfliPNGFilterStrategy.MinSum;
-                        break;
-                    case 'e':
-                        yield return ZopfliPNGFilterStrategy.Entropy;
-                        break;
-                    case 'p':
-                        yield return ZopfliPNGFilterStrategy.Predefined;
-                        break;
-                    case 'b':
-                        yield return ZopfliPNGFilterStrategy.BruteForce;
-                        break;
-                }
+                    '0' => ZopfliPNGFilterStrategy.Zero,
+                    '1' => ZopfliPNGFilterStrategy.One,
+                    '2' => ZopfliPNGFilterStrategy.Two,
+                    '3' => ZopfliPNGFilterStrategy.Three,
+                    '4' => ZopfliPNGFilterStrategy.Four,
+                    'm' => ZopfliPNGFilterStrategy.MinSum,
+                    'e' => ZopfliPNGFilterStrategy.Entropy,
+                    'p' => ZopfliPNGFilterStrategy.Predefined,
+                    'b' => ZopfliPNGFilterStrategy.BruteForce,
+                    _ => throw new ArgumentException($"Invalid filter strategy character is specified: {c}", nameof(filterStrategiesString))
+                };
             }
         }
 
@@ -472,7 +458,7 @@ namespace RecompressPng
                 }
 
                 Parallel.ForEach(
-                    srcArchive.Entries,
+                    Partitioner.Create(srcArchive.Entries, true),
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
@@ -644,7 +630,7 @@ namespace RecompressPng
                 var deleteEntryList = new List<ZipArchiveEntry>();
 
                 Parallel.ForEach(
-                    zipArchive.Entries,
+                    Partitioner.Create(zipArchive.Entries, true),
                     new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                     srcEntry =>
                     {
@@ -742,7 +728,11 @@ namespace RecompressPng
                 }
             }
 
-            if (execOptions.IsOverwrite)
+            if (nProcPngFiles == 0)
+            {
+                File.Delete(dstZipFilePath);
+            }
+            else if (execOptions.IsOverwrite)
             {
                 File.Delete(srcZipFilePath);
                 File.Move(dstZipFilePath, srcZipFilePath);
@@ -829,7 +819,7 @@ namespace RecompressPng
             execOptions.IsAddTimeChunk = false;
 
             Parallel.ForEach(
-                imageIndexes,
+                Partitioner.Create(imageIndexes, true),
                 new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                 imageIndex =>
                 {
@@ -1011,7 +1001,7 @@ namespace RecompressPng
             var totalSw = Stopwatch.StartNew();
 
             Parallel.ForEach(
-                Directory.EnumerateFiles(srcDirPath, "*.png", SearchOption.AllDirectories),
+                Partitioner.Create(Directory.EnumerateFiles(srcDirPath, "*.png", SearchOption.AllDirectories)),
                 new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
                 srcFilePath =>
                 {
@@ -1231,7 +1221,7 @@ namespace RecompressPng
         private static bool IsZipFile(string zipFilePath)
         {
             Span<byte> buffer = stackalloc byte[4];
-            using (var fs = new FileStream(zipFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var fs = File.OpenRead(zipFilePath))
             {
                 if (fs.Read(buffer) < buffer.Length)
                 {
@@ -1273,14 +1263,15 @@ namespace RecompressPng
         /// <returns>True if the specified binary has a PNG signature, otherwise false.</returns>
         private static bool HasPngSignature(ReadOnlySpan<byte> data)
         {
-            if (data.Length < PngSignature.Length)
+            var pngSignature = PngSignature;
+            if (data.Length < pngSignature.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < PngSignature.Length; i++)
+            for (int i = 0; i < pngSignature.Length; i++)
             {
-                if (data[i] != PngSignature[i])
+                if (data[i] != pngSignature[i])
                 {
                     return false;
                 }
@@ -1297,8 +1288,8 @@ namespace RecompressPng
         /// <returns>True if specified file is a glTF file, otherwise false.</returns>
         private static bool IsGltfFile(string gltfFilePath)
         {
-            Span<byte> buffer = stackalloc byte[4];
-            using (var fs = new FileStream(gltfFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Span<byte> buffer = stackalloc byte[GltfMagicBytes.Length];
+            using (var fs = File.OpenRead(gltfFilePath))
             {
                 if (fs.Read(buffer) < buffer.Length)
                 {
@@ -1315,14 +1306,15 @@ namespace RecompressPng
         /// <returns>True if the specified binary has a glTF magic number, otherwise false.</returns>
         private static bool HasGltfMagic(ReadOnlySpan<byte> data)
         {
-            if (data.Length < GltfMagicBytes.Length)
+            var gltfMagicBytes = GltfMagicBytes;
+            if (data.Length < gltfMagicBytes.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < GltfMagicBytes.Length; i++)
+            for (int i = 0; i < gltfMagicBytes.Length; i++)
             {
-                if (data[i] != GltfMagicBytes[i])
+                if (data[i] != gltfMagicBytes[i])
                 {
                     return false;
                 }
@@ -1556,7 +1548,7 @@ namespace RecompressPng
         /// <returns>Deflated rete.</returns>
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
-            return 1.0 - (double)compressedSize / originalSize;
+            return originalSize == 0L ? 0.0 : (1.0 - (double)compressedSize / originalSize);
         }
 
         /// <summary>

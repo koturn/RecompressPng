@@ -1,4 +1,4 @@
-version: 1.3.{build}
+version: 1.4.{build}
 image: Visual Studio 2022
 environment:
   SOLUTION_NAME: RecompressPng
@@ -28,6 +28,14 @@ build_script:
     xcopy /Y %MAIN_PROJECT_OUTDIR%\x86\*.dll %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\x86\
 
     del %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\*.pdb
+
+    del %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\System.Buffers.dll
+
+    del %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\System.Memory.dll
+
+    del %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\System.Numerics.Vectors.dll
+
+    del %ARTIFACTS_BASEDIR%\%ARTIFACTS_SUBDIR%\System.Runtime.CompilerServices.Unsafe.dll
 
     cd %ARTIFACTS_BASEDIR%
 
