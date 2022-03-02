@@ -910,11 +910,13 @@ namespace RecompressPng
                 {
                     glbHeader.WriteTo(stream);
                     glbChunks[0].WriteTo(stream);
-                    stream.Write(BitConverter.GetBytes(glbChunks[1].Length));
-                    stream.Write(BitConverter.GetBytes(glbChunks[1].ChunkType));
+                    var bytes = BitConverter.GetBytes(glbChunks[1].Length);
+                    stream.Write(bytes, 0, bytes.Length);
+                    bytes = BitConverter.GetBytes(glbChunks[1].ChunkType);
+                    stream.Write(bytes, 0, bytes.Length);
                     foreach (var buf in binaryBuffers)
                     {
-                        stream.Write(buf);
+                        stream.Write(buf, 0, buf.Length);
                     }
                 }
 
@@ -1391,7 +1393,7 @@ namespace RecompressPng
                     using var idatMs = new MemoryStream((int)srcPngStream.Length);
                     do
                     {
-                        idatMs.Write(pngChunk.Data);
+                        idatMs.Write(pngChunk.Data, 0, pngChunk.Data.Length);
                         pngChunk = PngChunk.ReadOneChunk(srcPngStream);
                     } while (pngChunk.Type == ChunkTypeIdat);
                     idatMs.Position = 0;

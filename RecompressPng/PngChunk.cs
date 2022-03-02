@@ -81,7 +81,7 @@ namespace RecompressPng
             s.Write(buf);
 
             // Data
-            s.Write(data);
+            s.Write(data, 0, data.Length);
 
             // CRC-32
             WriteAsBigEndian(s, Crc32);
@@ -110,7 +110,7 @@ namespace RecompressPng
             var type = Encoding.ASCII.GetString(buf);
 
             var data = new byte[length];
-            if (s.Read(data) < data.Length)
+            if (s.Read(data, 0, data.Length) < data.Length)
             {
                 throw new InvalidDataException($"Failed to data type at {type} chunk");
             }
@@ -144,11 +144,11 @@ namespace RecompressPng
             WriteAsBigEndian(s, keyData.Length + 1 + valueData.Length);
 
             var textChunkTypeData = Encoding.ASCII.GetBytes("tEXt");
-            s.Write(textChunkTypeData);
+            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
 
-            s.Write(keyData);
+            s.Write(keyData, 0, keyData.Length);
             s.WriteByte((byte)0);
-            s.Write(valueData);
+            s.Write(valueData, 0, valueData.Length);
 
             var crc = Crc32Calculator.Update(textChunkTypeData);
             crc = Crc32Calculator.Update(keyData, crc);
@@ -180,7 +180,7 @@ namespace RecompressPng
 
             var textChunkTypeData = Encoding.ASCII.GetBytes("tIME");
 
-            s.Write(textChunkTypeData);
+            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
             s.Write(dtData);
 
             var crc = Crc32Calculator.Update(textChunkTypeData);
