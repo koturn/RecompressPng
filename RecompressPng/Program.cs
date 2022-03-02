@@ -211,6 +211,9 @@ namespace RecompressPng
             ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
             ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
+            ap.Add('q', "no-use-zopfli",
+                "Use quick, but not very good, compression.\n"
+                + indent2 + "(e.g. for only trying the PNG filter and color types)");
             ap.Add('r', "replace-force", "Do the replacement even if the size of the recompressed data is larger than the size of the original data.");
             ap.Add('v', "verbose", "Allow to output to stdout from zopflipng.dll.");
             ap.Add("add-text-creation-time",
@@ -248,7 +251,6 @@ namespace RecompressPng
             ap.Add("no-auto-filter-strategy", "Automatically choose filter strategy using less good compression.");
             ap.Add("no-keep-timestamp", "Don't keep timestamp.");
             ap.Add("no-overwrite", "Don't overwrite PNG files and create images to new zip archive file or directory.");
-            ap.Add("no-use-zopfli", "Use Zopfli deflate compression.");
             ap.Add("no-verify-image", "Don't compare two image data.");
 
             ap.Parse(args);
@@ -291,7 +293,7 @@ namespace RecompressPng
             zo.LossyTransparent = ap.GetValue<bool>("lossy-transparent");
             zo.Lossy8bit = ap.GetValue<bool>("lossy-8bit");
             zo.AutoFilterStrategy = !ap.GetValue<bool>("no-auto-filter-strategy");
-            zo.UseZopfli = !ap.GetValue<bool>("no-use-zopfli");
+            zo.UseZopfli = !ap.GetValue<bool>('q');
 
             if (ap.HasValue('f'))
             {
