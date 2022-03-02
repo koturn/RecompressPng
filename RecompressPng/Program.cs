@@ -1541,7 +1541,7 @@ namespace RecompressPng
         /// <returns>Deflated rete.</returns>
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
-            return 1.0 - (double)compressedSize / originalSize;
+            return originalSize == 0L ? 0.0 : (1.0 - (double)compressedSize / originalSize);
         }
 
         /// <summary>
