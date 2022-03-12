@@ -6,7 +6,7 @@ namespace RecompressPng
     /// <summary>
     /// CRC-32 calculation class.
     /// </summary>
-    public class Crc32Calculator
+    public static class Crc32Calculator
     {
         /// <summary>
         /// Cache of CRC-32 table.
