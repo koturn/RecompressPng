@@ -26,6 +26,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="buf"><see cref="byte"/> data array.</param>
         /// <returns>CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Compute(byte[] buf)
         {
             return Compute(buf.AsSpan());
@@ -38,6 +39,7 @@ namespace RecompressPng
         /// <param name="offset">Offset of <paramref name="buf"/>.</param>
         /// <param name="count">Data count of <paramref name="buf"/>.</param>
         /// <returns>CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Compute(byte[] buf, int offset, int count)
         {
             return Compute(buf.AsSpan(offset, count));
@@ -48,6 +50,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="buf"><see cref="ReadOnlySpan{T}"/> of <see cref="byte"/> data.</param>
         /// <returns>CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Compute(ReadOnlySpan<byte> buf)
         {
             return Finalize(Update(buf));
@@ -61,6 +64,7 @@ namespace RecompressPng
         /// <param name="buf"><see cref="byte"/> data array.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Update(byte[] buf, uint crc = InitialValue)
         {
             return Update(buf.AsSpan(), crc);
@@ -75,6 +79,7 @@ namespace RecompressPng
         /// <param name="count">Data count of <paramref name="buf"/>.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Update(byte[] buf, int offset, int count, uint crc = InitialValue)
         {
             return Update(buf.AsSpan(offset, count), crc);
@@ -101,6 +106,7 @@ namespace RecompressPng
         /// <param name="x">A value of <see cref="byte"/>.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Update(byte x, uint crc = InitialValue)
         {
             return GetTable()[(crc ^ x) & 0xff] ^ (crc >> 8);
@@ -111,6 +117,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="crc">Intermidiate CRC-32 value</param>
         /// <returns>CRC-32 value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Finalize(uint crc)
         {
             return ~crc;
@@ -268,6 +275,7 @@ namespace RecompressPng
         /// <para>If the cache is not generated, generate and return it.</para>
         /// </summary>
         /// <returns>CRC-32 table</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint[] GetTable()
         {
             return _table ??= GenerateTable();
