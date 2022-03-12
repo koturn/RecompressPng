@@ -232,7 +232,7 @@ namespace RecompressPng
         public static unsafe bool CompareMemoryNaiveX64(byte* pData1, byte* pData2, ulong dataLength)
         {
             const ulong stride = sizeof(ulong);
-            var n = dataLength / stride * stride;
+            var n = dataLength & ~(stride - 1);
 
             for (ulong i = 0; i < n; i += stride)
             {
@@ -278,7 +278,7 @@ namespace RecompressPng
         public static unsafe bool CompareMemoryNaiveX86(byte* pData1, byte* pData2, uint dataLength)
         {
             const uint stride = sizeof(uint);
-            var n = dataLength / stride * stride;
+            var n = dataLength & ~(stride - 1);
 
             for (uint i = 0; i < n; i += stride)
             {
@@ -325,7 +325,7 @@ namespace RecompressPng
         public static unsafe bool CompareMemorySse2(byte* pData1, byte* pData2, ulong dataLength)
         {
             const ulong stride = 16;
-            var n = dataLength / stride * stride;
+            var n = dataLength & ~(stride - 1);
 
             for (ulong i = 0; i < n; i += stride)
             {
@@ -374,7 +374,7 @@ namespace RecompressPng
         public static unsafe bool CompareMemoryAvx2(byte* pData1, byte* pData2, ulong dataLength)
         {
             const ulong stride = 32;
-            var n = dataLength / stride * stride;
+            var n = dataLength & ~(stride - 1);
 
             for (ulong i = 0; i < n; i += stride)
             {
