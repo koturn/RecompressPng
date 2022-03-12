@@ -9,6 +9,11 @@ namespace RecompressPng
     public static class Crc32Calculator
     {
         /// <summary>
+        /// Initial value of CRC-32.
+        /// </summary>
+        public const uint InitialValue = 0xffffffffU;
+
+        /// <summary>
         /// Cache of CRC-32 table.
         /// </summary>
         private static uint[]? _table;
@@ -53,7 +58,7 @@ namespace RecompressPng
         /// <param name="buf"><see cref="byte"/> data array.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
-        public static uint Update(byte[] buf, uint crc = 0xffffffff)
+        public static uint Update(byte[] buf, uint crc = InitialValue)
         {
             return Update(buf.AsSpan(), crc);
         }
@@ -67,7 +72,7 @@ namespace RecompressPng
         /// <param name="count">Data count of <paramref name="buf"/>.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
-        public static uint Update(byte[] buf, int offset, int count, uint crc = 0xffffffff)
+        public static uint Update(byte[] buf, int offset, int count, uint crc = InitialValue)
         {
             return Update(buf.AsSpan(offset, count), crc);
         }
@@ -79,7 +84,7 @@ namespace RecompressPng
         /// <param name="buf"><see cref="ReadOnlySpan{T}"/> of <see cref="byte"/> data.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
-        public static uint Update(ReadOnlySpan<byte> buf, uint crc = 0xffffffff)
+        public static uint Update(ReadOnlySpan<byte> buf, uint crc = InitialValue)
         {
             var crcTable = GetTable();
 
@@ -99,7 +104,7 @@ namespace RecompressPng
         /// <param name="x">A value of <see cref="byte"/>.</param>
         /// <param name="crc">Intermidiate CRC-32 value.</param>
         /// <returns>Updated intermidiate CRC-32 value.</returns>
-        public static uint Update(byte x, uint crc = 0xffffffff)
+        public static uint Update(byte x, uint crc = InitialValue)
         {
             return GetTable()[(crc ^ x) & 0xff] ^ (crc >> 8);
         }
