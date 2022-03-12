@@ -135,6 +135,9 @@ namespace RecompressPng
         /// This method only used in <see cref="GenerateTable"/>.
         /// </summary>
         /// <returns>CRC-32 table.</returns>
+        /// <remarks>
+        /// <see href="https://create.stephan-brumme.com/crc32/"/>
+        /// </remarks>
         private static uint[] GenerateTable()
         {
             var crcTable = new uint[256];
@@ -144,7 +147,7 @@ namespace RecompressPng
                 var c = (uint)n;
                 for (var k = 0; k < 8; k++)
                 {
-                    c = (c & 1) != 0 ? (0xedb88320 ^ (c >> 1)) : (c >> 1);
+                    c = (c >> 1) ^ (c & 1) * 0xedb88320U;
                 }
                 crcTable[n] = c;
             }
