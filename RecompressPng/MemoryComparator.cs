@@ -3,6 +3,7 @@
 #endif  // NETCOREAPP3_0_OR_GREATER
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 
@@ -44,11 +45,11 @@ namespace RecompressPng
         /// Native method handle of memory comparison function.
         /// </summary>
         private NativeMethodHandle<CompareMemoryDelegate> _compareMemoryMethodHandle;
-#endif  // !NET_SIMD
         /// <summary>
         /// Delegate of memory comparison method.
         /// </summary>
         private CompareMemoryDelegate? _compareMemory;
+#endif  // !NET_SIMD
 
 
         /// <summary>
@@ -57,23 +58,13 @@ namespace RecompressPng
         public MemoryComparator()
         {
             IsDisposed = false;
-#if NET_SIMD
-            if (Avx2.IsSupported)
-            {
-                _compareMemory = CompareMemoryAvx2;
-            }
-            else if (Sse2.IsSupported)
-            {
-                _compareMemory = CompareMemorySse2;
-            }
-#else
+#if !NET_SIMD
             var mh = CreateAppropreateCompareMemoryMethodHandle();
             if (mh != null)
             {
                 _compareMemoryMethodHandle = mh;
                 _compareMemory = mh.Method;
             }
-#endif  // NET_SIMD
             else if (Environment.Is64BitProcess)
             {
                 _compareMemory = CompareMemoryNaiveX64;
@@ -82,6 +73,7 @@ namespace RecompressPng
             {
                 _compareMemory = CompareMemoryNaiveX86;
             }
+#endif  // !NET_SIMD
         }
 
 
@@ -99,8 +91,8 @@ namespace RecompressPng
             }
             if (disposing)
             {
-                _compareMemory = null;
 #if !NET_SIMD
+                _compareMemory = null;
                 if (_compareMemoryMethodHandle != null)
                 {
                     _compareMemoryMethodHandle.Dispose();
@@ -129,6 +121,7 @@ namespace RecompressPng
         /// <param name="data1">First byte data array.</param>
         /// <param name="data2">Second byte data array.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool CompareMemory(byte[] data1, byte[] data2)
         {
             return data1.LongLength == data2.LongLength && CompareMemory(data1, data2, data1.LongLength);
@@ -183,14 +176,35 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool CompareMemory(IntPtr pData1, IntPtr pData2, long dataLength)
         {
+#if NET_SIMD
+            // This method call is replaced one of following method at JIT compile time.
+            if (Avx2.IsSupported)
+            {
+                return CompareMemoryAvx2(pData1, pData2, (UIntPtr)dataLength);
+            }
+            else if (Sse2.IsSupported)
+            {
+                return CompareMemorySse2(pData1, pData2, (UIntPtr)dataLength);
+            }
+            else if (Environment.Is64BitProcess)
+            {
+                return CompareMemoryNaiveX64(pData1, pData2, (UIntPtr)dataLength);
+            }
+            else
+            {
+                return CompareMemoryNaiveX86(pData1, pData2, (UIntPtr)dataLength);
+            }
+#else
             if (_compareMemory == null)
             {
                 ThrowArgumentNullException(nameof(_compareMemory), "This instance was already disposed.");
                 return false;
             }
             return _compareMemory(pData1, pData2, (UIntPtr)dataLength);
+#endif
         }
 
 
@@ -201,6 +215,7 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool CompareMemoryNaiveX64(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
             return CompareMemoryNaiveX64((byte*)pData1, (byte*)pData2, (ulong)dataLength);
@@ -246,6 +261,7 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool CompareMemoryNaiveX86(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
             return CompareMemoryNaiveX86((byte*)pData1, (byte*)pData2, (uint)dataLength);
@@ -292,6 +308,7 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool CompareMemorySse2(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
             return CompareMemorySse2((byte*)pData1, (byte*)pData2, (uint)dataLength);
@@ -340,6 +357,7 @@ namespace RecompressPng
         /// <param name="pData2">Second pointer to byte data array.</param>
         /// <param name="dataLength">Data length of <paramref name="pData1"/> and <paramref name="pData2"/>.</param>
         /// <returns>True if two byte data is same, otherwise false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool CompareMemoryAvx2(IntPtr pData1, IntPtr pData2, UIntPtr dataLength)
         {
             return CompareMemoryAvx2((byte*)pData1, (byte*)pData2, (uint)dataLength);
@@ -635,6 +653,7 @@ namespace RecompressPng
 #endif  // NET_SIMD
 
 
+#if !NET_SIMD
         /// <summary>
         /// Throw <see cref="ArgumentNullException"/>.
         /// </summary>
@@ -646,5 +665,6 @@ namespace RecompressPng
         {
             throw new ArgumentNullException(paramName, message);
         }
+#endif  // !NET_SIMD
     }
 }
