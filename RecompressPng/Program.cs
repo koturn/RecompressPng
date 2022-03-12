@@ -1406,9 +1406,9 @@ namespace RecompressPng
                         bw.Write(chunkTypeDataIdat);
                         bw.Write(idatData, 0, nRead);
 
-                        var crc32 = Crc32Calculator.Update(chunkTypeDataIdat);
-                        crc32 = Crc32Calculator.Update(idatData, 0, nRead, crc32);
-                        crc32 = Crc32Calculator.Finalize(crc32);
+                        var crc32 = Crc32Util.Update(chunkTypeDataIdat);
+                        crc32 = Crc32Util.Update(idatData, 0, nRead, crc32);
+                        crc32 = Crc32Util.Finalize(crc32);
                         bw.Write(BinaryPrimitives.ReverseEndianness(crc32));
                     }
                 }
