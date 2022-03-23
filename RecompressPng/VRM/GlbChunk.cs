@@ -16,7 +16,7 @@ namespace RecompressPng.VRM
         /// <summary>
         /// Chunk type value.
         /// </summary>
-        public int ChunkType { get; set; }
+        public GlbChunkType ChunkType { get; set; }
         /// <summary>
         /// Chunk data.
         /// </summary>
@@ -28,7 +28,7 @@ namespace RecompressPng.VRM
         /// <param name="length">Length of this chunk.</param>
         /// <param name="chunkType">Chunk type value.</param>
         /// <param name="data">Chunk data.</param>
-        public GlbChunk(int length, int chunkType, byte[] data)
+        public GlbChunk(int length, GlbChunkType chunkType, byte[] data)
         {
             Length = length;
             ChunkType = chunkType;
@@ -43,7 +43,7 @@ namespace RecompressPng.VRM
         {
             using var bw = new BinaryWriter(stream, Encoding.Default, true);
             bw.Write(Length);
-            bw.Write(ChunkType);
+            bw.Write((uint)ChunkType);
             if (Data != null)
             {
                 bw.Write(Data);

@@ -912,7 +912,7 @@ namespace RecompressPng
                     glbChunks[0].WriteTo(stream);
                     var bytes = BitConverter.GetBytes(glbChunks[1].Length);
                     stream.Write(bytes, 0, bytes.Length);
-                    bytes = BitConverter.GetBytes(glbChunks[1].ChunkType);
+                    bytes = BitConverter.GetBytes((uint)glbChunks[1].ChunkType);
                     stream.Write(bytes, 0, bytes.Length);
                     foreach (var buf in binaryBuffers)
                     {

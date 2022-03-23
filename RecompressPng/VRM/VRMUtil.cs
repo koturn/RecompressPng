@@ -40,7 +40,7 @@ namespace RecompressPng.VRM
             for (int i = 0, capacity = chunks.Capacity; i < capacity; i++)
             {
                 var length = br.ReadInt32();
-                var chunkType = br.ReadInt32();
+                var chunkType = (GlbChunkType)br.ReadInt32();
                 chunks.Add(new GlbChunk(length, chunkType, br.ReadBytes(length)));
             }
             return (header, chunks);
@@ -51,6 +51,15 @@ namespace RecompressPng.VRM
         /// </summary>
         public static (JsonValue GltfJson, List<byte[]> BinaryBuffers, List<ImageIndex> ImageIndexes) ParseGltf(List<GlbChunk> glbChunks)
         {
+            if (glbChunks[0].ChunkType != GlbChunkType.Json)
+            {
+                throw new InvalidDataException($"Fitst GLB chunk type is not JSON. expected = 0x{(uint)GlbChunkType.Json:X8}; actual = 0x{glbChunks[0].ChunkType:X8}");
+            }
+            if (glbChunks[1].ChunkType != GlbChunkType.Binary)
+            {
+                throw new InvalidDataException($"Second GLB chunk type is not Binary. expected = 0x{(uint)GlbChunkType.Binary:X8}; actual = 0x{glbChunks[1].ChunkType:X8}");
+            }
+
             var data0 = glbChunks[0].Data;
             if (data0 == null)
             {
