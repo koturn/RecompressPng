@@ -901,9 +901,9 @@ namespace RecompressPng
                 }
 
                 glbChunks[1].Length = nOffset;
-                glbChunks[0].Data = Encoding.UTF8.GetBytes(gltfJson.ToString());
-                var data = glbChunks[0].Data;
-                glbChunks[0].Length = data == null ? 0 : data.Length;
+                var data = Encoding.UTF8.GetBytes(gltfJson.ToString());
+                glbChunks[0].Data = data;
+                glbChunks[0].Length = data.Length;
                 glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
 
                 using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
