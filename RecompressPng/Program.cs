@@ -895,6 +895,9 @@ namespace RecompressPng
                 {
                     var buffer = binaryBuffers[i];
                     var bufferView = gltfJson["bufferViews"][i];
+
+                    // byteOffset must be multiply of 4.
+                    nOffset = (nOffset + 0x3) & ~0x3;
                     bufferView["byteOffset"] = nOffset;
                     bufferView["byteLength"] = buffer.Length;
                     nOffset += buffer.Length;
@@ -904,19 +907,24 @@ namespace RecompressPng
                 var data = Encoding.UTF8.GetBytes(gltfJson.ToString());
                 glbChunks[0].Data = data;
                 glbChunks[0].Length = data.Length;
-                glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
+                glbHeader.Length = sizeof(uint) * 3 + sizeof(uint) * 2 * 2 + glbChunks[0].Length + glbChunks[1].Length;
 
                 using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
                 {
+                    // Write header.
                     glbHeader.WriteTo(stream);
+                    // Write first chunk.
                     glbChunks[0].WriteTo(stream);
-                    var bytes = BitConverter.GetBytes(glbChunks[1].Length);
-                    stream.Write(bytes, 0, bytes.Length);
-                    bytes = BitConverter.GetBytes((uint)glbChunks[1].ChunkType);
-                    stream.Write(bytes, 0, bytes.Length);
+                    // Write second chunk.
+                    glbChunks[1].WriteTo(stream);
+
+                    nOffset = 0;
                     foreach (var buf in binaryBuffers)
                     {
+                        var alignedOffset = (nOffset + 0x3) & ~0x3;
+                        stream.Position += alignedOffset - nOffset;
                         stream.Write(buf, 0, buf.Length);
+                        nOffset = alignedOffset + buf.Length;
                     }
                 }
 
