@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Security;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -904,7 +905,7 @@ namespace RecompressPng
                 }
 
                 glbChunks[1].Length = nOffset;
-                var data = Encoding.UTF8.GetBytes(gltfJson.ToString());
+                var data = Encoding.UTF8.GetBytes(Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1"));
                 glbChunks[0].Data = data;
                 glbChunks[0].Length = data.Length;
                 glbHeader.Length = sizeof(uint) * 3 + sizeof(uint) * 2 * 2 + glbChunks[0].Length + glbChunks[1].Length;
