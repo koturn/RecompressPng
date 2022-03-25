@@ -298,11 +298,11 @@ namespace RecompressPng
 
             if (ap.HasValue('f'))
             {
-                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('f')));
+                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('f')!));
             }
             if (ap.HasValue("keep-chunks"))
             {
-                zo.KeepChunks.AddRange(ap.GetValue("keep-chunks").Split(','));
+                zo.KeepChunks.AddRange(ap.GetValue("keep-chunks")!.Split(','));
             }
             if (ap.GetValue<bool>("keep-all-chunks"))
             {
