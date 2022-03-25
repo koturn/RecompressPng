@@ -81,7 +81,7 @@ namespace RecompressPng
             s.Write(buf);
 
             // Data
-            s.Write(data);
+            s.Write(data, 0, data.Length);
 
             // CRC-32
             WriteAsBigEndian(s, Crc32);
@@ -110,7 +110,7 @@ namespace RecompressPng
             var type = Encoding.ASCII.GetString(buf);
 
             var data = new byte[length];
-            if (s.Read(data) < data.Length)
+            if (s.Read(data, 0, data.Length) < data.Length)
             {
                 throw new InvalidDataException($"Failed to data type at {type} chunk");
             }
@@ -144,18 +144,18 @@ namespace RecompressPng
             WriteAsBigEndian(s, keyData.Length + 1 + valueData.Length);
 
             var textChunkTypeData = Encoding.ASCII.GetBytes("tEXt");
-            s.Write(textChunkTypeData);
+            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
 
-            s.Write(keyData);
+            s.Write(keyData, 0, keyData.Length);
             s.WriteByte((byte)0);
-            s.Write(valueData);
+            s.Write(valueData, 0, valueData.Length);
 
-            var crc = Crc32Calculator.Update(textChunkTypeData);
-            crc = Crc32Calculator.Update(keyData, crc);
-            crc = Crc32Calculator.Update((byte)0, crc);
-            crc = Crc32Calculator.Update(valueData, crc);
+            var crc = Crc32Util.Update(textChunkTypeData);
+            crc = Crc32Util.Update(keyData, crc);
+            crc = Crc32Util.Update((byte)0, crc);
+            crc = Crc32Util.Update(valueData, crc);
 
-            WriteAsBigEndian(s, Crc32Calculator.Finalize(crc));
+            WriteAsBigEndian(s, Crc32Util.Finalize(crc));
         }
 
         /// <summary>
@@ -180,12 +180,12 @@ namespace RecompressPng
 
             var textChunkTypeData = Encoding.ASCII.GetBytes("tIME");
 
-            s.Write(textChunkTypeData);
+            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
             s.Write(dtData);
 
-            var crc = Crc32Calculator.Update(textChunkTypeData);
-            crc = Crc32Calculator.Update(dtData, crc);
-            WriteAsBigEndian(s, Crc32Calculator.Finalize(crc));
+            var crc = Crc32Util.Update(textChunkTypeData);
+            crc = Crc32Util.Update(dtData, crc);
+            WriteAsBigEndian(s, Crc32Util.Finalize(crc));
         }
 
         /// <summary>
@@ -261,7 +261,7 @@ namespace RecompressPng
         /// <returns>Computed CRC-32 value.</returns>
         private static uint ComputeCrc32(ReadOnlySpan<byte> typeData, ReadOnlySpan<byte> data)
         {
-            return Crc32Calculator.Finalize(Crc32Calculator.Update(data, Crc32Calculator.Update(typeData)));
+            return Crc32Util.Finalize(Crc32Util.Update(data, Crc32Util.Update(typeData)));
         }
     }
 }

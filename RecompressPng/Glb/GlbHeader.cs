@@ -2,10 +2,10 @@
 using System.Text;
 
 
-namespace RecompressPng.VRM
+namespace RecompressPng.Glb
 {
     /// <summary>
-    /// VRM/GLBのヘッダ
+    /// Header of GLB.
     /// </summary>
     public class GlbHeader
     {

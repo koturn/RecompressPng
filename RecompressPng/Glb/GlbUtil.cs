@@ -6,12 +6,12 @@ using System.Json;
 using System.Linq;
 
 
-namespace RecompressPng.VRM
+namespace RecompressPng.Glb
 {
     /// <summary>
     /// Utility class of VRM/GLB.
     /// </summary>
-    public static class VRMUtil
+    public static class GlbUtil
     {
         /// <summary>
         /// Split header and chunks in GLB file.
@@ -40,7 +40,7 @@ namespace RecompressPng.VRM
             for (int i = 0, capacity = chunks.Capacity; i < capacity; i++)
             {
                 var length = br.ReadInt32();
-                var chunkType = br.ReadInt32();
+                var chunkType = (GlbChunkType)br.ReadInt32();
                 chunks.Add(new GlbChunk(length, chunkType, br.ReadBytes(length)));
             }
             return (header, chunks);
@@ -49,8 +49,18 @@ namespace RecompressPng.VRM
         /// <summary>
         /// Parse json of glTF.
         /// </summary>
+        /// <returns><see cref="ValueTuple"/> of glTF json, list of buffers and imageIndexes.</returns>
         public static (JsonValue GltfJson, List<byte[]> BinaryBuffers, List<ImageIndex> ImageIndexes) ParseGltf(List<GlbChunk> glbChunks)
         {
+            if (glbChunks[0].ChunkType != GlbChunkType.Json)
+            {
+                throw new InvalidDataException($"Fitst GLB chunk type is not JSON. expected = 0x{(uint)GlbChunkType.Json:X8}; actual = 0x{glbChunks[0].ChunkType:X8}");
+            }
+            if (glbChunks[1].ChunkType != GlbChunkType.Binary)
+            {
+                throw new InvalidDataException($"Second GLB chunk type is not Binary. expected = 0x{(uint)GlbChunkType.Binary:X8}; actual = 0x{glbChunks[1].ChunkType:X8}");
+            }
+
             var data0 = glbChunks[0].Data;
             if (data0 == null)
             {
@@ -64,16 +74,7 @@ namespace RecompressPng.VRM
             {
                 throw new ArgumentNullException(nameof(data1), "Second GLB chunk data is null.");
             }
-            var binaryBuffers = new List<byte[]>(bufferViews.Count);
-            binaryBuffers.AddRange(bufferViews.Select(bv =>
-            {
-                var buffer = new byte[bv["byteLength"]];
-                Array.Copy(data1, bv["byteOffset"], buffer, 0, buffer.Length);
-
-                return buffer;
-            }));
-
-            glbChunks[1].Data = null;
+            var binaryBuffers = SplitBuffer(data1, bufferViews);
 
             var images = (JsonArray)gltfJson["images"];
             var imageIndexes = new List<ImageIndex>(images.Count);
@@ -81,6 +82,7 @@ namespace RecompressPng.VRM
 
             return (gltfJson, binaryBuffers, imageIndexes);
         }
+
 
         /// <summary>
         /// Load json data.
@@ -91,6 +93,24 @@ namespace RecompressPng.VRM
         {
             using var ms = new MemoryStream(jsonData);
             return JsonValue.Load(ms);
+        }
+
+        /// <summary>
+        /// Split second chunk data of GLB.
+        /// </summary>
+        /// <param name="wholeBuffer">Data of second chunk.</param>
+        /// <param name="bufferViews">JSON value of "bufferViews".</param>
+        /// <returns>List of split buffers.</returns>
+        private static List<byte[]> SplitBuffer(byte[] wholeBuffer, JsonArray bufferViews)
+        {
+            var binaryBuffers = new List<byte[]>(bufferViews.Count);
+            binaryBuffers.AddRange(bufferViews.Select(bv =>
+            {
+                var buffer = new byte[bv["byteLength"]];
+                Buffer.BlockCopy(wholeBuffer, bv["byteOffset"], buffer, 0, buffer.Length);
+                return buffer;
+            }));
+            return binaryBuffers;
         }
     }
 }

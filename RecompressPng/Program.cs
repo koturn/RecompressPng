@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Security;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -18,7 +19,7 @@ using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
 using NLog;
 using ZopfliSharp;
-using RecompressPng.VRM;
+using RecompressPng.Glb;
 
 
 namespace RecompressPng
@@ -126,11 +127,11 @@ namespace RecompressPng
                     {
                         if (execOptions.IsCountOnly)
                         {
-                            CountPngInVrm(target);
+                            CountPngInGlb(target);
                         }
                         else
                         {
-                            RecompressPngInVrm(target, null, pngOptions, execOptions);
+                            RecompressPngInGlb(target, null, pngOptions, execOptions);
                         }
                     }
                     else
@@ -303,11 +304,11 @@ namespace RecompressPng
 
             if (ap.HasValue('f'))
             {
-                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('f')));
+                zo.FilterStrategies.AddRange(ParseFilterStrategiesString(ap.GetValue('f')!));
             }
             if (ap.HasValue("keep-chunks"))
             {
-                zo.KeepChunks.AddRange(ap.GetValue("keep-chunks").Split(','));
+                zo.KeepChunks.AddRange(ap.GetValue("keep-chunks")!.Split(','));
             }
             if (ap.GetValue<bool>("keep-all-chunks"))
             {
@@ -788,32 +789,44 @@ namespace RecompressPng
         /// <summary>
         /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
         /// </summary>
-        /// <param name="srcVrmFilePath">Source zip archive file.</param>
-        /// <param name="dstVrmFilePath">Destination zip archive file.</param>
+        /// <param name="srcGlbFilePath">Source GLB file.</param>
+        /// <param name="dstGlbFilePath">Destination GLB file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInVrm(string srcVrmFilePath, string? dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInGlb(string srcGlbFilePath, string? dstGlbFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
-            dstVrmFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcVrmFilePath) ?? ".",
-                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
+            dstGlbFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcGlbFilePath) ?? ".",
+                Path.GetFileNameWithoutExtension(srcGlbFilePath) + ".zopfli" + Path.GetExtension(srcGlbFilePath));
 
-            if (File.Exists(dstVrmFilePath))
+            if (File.Exists(dstGlbFilePath))
             {
-                File.Delete(dstVrmFilePath);
+                File.Delete(dstGlbFilePath);
             }
 
-            var (glbHeader, glbChunks) = VRMUtil.ParseChunk(srcVrmFilePath);
-            var (gltfJson, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+            var (glbHeader, glbChunks) = GlbUtil.ParseChunk(srcGlbFilePath);
+            var (gltfJson, binaryBuffers, imageIndexes) = GlbUtil.ParseGltf(glbChunks);
+
+            // Validate data length.
+            var fileSize = new FileInfo(srcGlbFilePath).Length;
+            if (glbHeader.Length != fileSize)
+            {
+                _logger.Warn($"The size described in the header differs from the actual file size. Expected: {glbHeader.Length} Bytes, Actual: {fileSize} Bytes");
+            }
+            var buffer0Length = (int)gltfJson["buffers"][0]["byteLength"];
+            if (buffer0Length != glbChunks[1].Length)
+            {
+                _logger.Warn($"The size described in the buffers[0].byteLength in the glTF json differs from the size of data of second chunk. Expected: {buffer0Length} Bytes, Actual: {glbChunks[1].Length} Bytes");
+            }
 
             int nProcPngFiles = 0;
-            var srcFileSize = new FileInfo(srcVrmFilePath).Length;
+            var srcFileSize = new FileInfo(srcGlbFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
             var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
             // Overwrite options.
-            // PNG file in VRM file doesn't have its timestamp.
+            // PNG file in GLB file doesn't have its timestamp.
             execOptions = (ExecuteOptions)execOptions.Clone();
             execOptions.TextCreationTimeFormat = null;
             execOptions.IsAddTimeChunk = false;
@@ -902,33 +915,61 @@ namespace RecompressPng
                 {
                     var buffer = binaryBuffers[i];
                     var bufferView = gltfJson["bufferViews"][i];
+
+                    // byteOffset must be multiply of 4.
                     bufferView["byteOffset"] = nOffset;
                     bufferView["byteLength"] = buffer.Length;
-                    nOffset += buffer.Length;
+                    nOffset = (nOffset + buffer.Length + 0x3) & ~0x3;
                 }
 
-                glbChunks[1].Length = nOffset;
-                glbChunks[0].Data = Encoding.UTF8.GetBytes(gltfJson.ToString());
-                var data = glbChunks[0].Data;
-                glbChunks[0].Length = data == null ? 0 : data.Length;
-                glbHeader.Length = 12 + 8 + glbChunks[0].Length + 8 + glbChunks[1].Length;
-
-                using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                gltfJson["buffers"][0]["byteLength"] = nOffset;
+                var jsonString = Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+                var jsonByteCount = Encoding.UTF8.GetByteCount(jsonString);
+                var jsonAlignedByteCount = (jsonByteCount + 0x3) & ~0x3;
+                var data = new byte[jsonAlignedByteCount];
+                Encoding.UTF8.GetBytes(jsonString, data);
+                for (int i = jsonByteCount; i < jsonAlignedByteCount; i++)
                 {
+                    data[i] = (byte)' ';
+                }
+
+                glbChunks[0].Data = data;
+                glbChunks[0].Length = data.Length;
+
+                // Discard original binary data.
+                glbChunks[1].Data = null;
+                glbChunks[1].Length = nOffset;
+                glbHeader.Length = sizeof(uint) * 3 + sizeof(uint) * 2 * 2 + glbChunks[0].Length + glbChunks[1].Length;
+
+                using (var stream = new FileStream(dstGlbFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                {
+                    // Write header.
                     glbHeader.WriteTo(stream);
+                    // Write first chunk.
                     glbChunks[0].WriteTo(stream);
-                    stream.Write(BitConverter.GetBytes(glbChunks[1].Length));
-                    stream.Write(BitConverter.GetBytes(glbChunks[1].ChunkType));
+                    // Write second chunk.
+                    glbChunks[1].WriteTo(stream);
+
+                    ReadOnlySpan<byte> padding = stackalloc byte[4];
+                    nOffset = 0;
                     foreach (var buf in binaryBuffers)
                     {
-                        stream.Write(buf);
+                        stream.Write(buf, 0, buf.Length);
+                        nOffset += buf.Length;
+                        var alignedOffset = (nOffset + 0x3) & ~0x3;
+                        var diff = alignedOffset - nOffset;
+                        if (diff > 0)
+                        {
+                            stream.Write(padding.Slice(0, diff));
+                        }
+                        nOffset = alignedOffset;
                     }
                 }
 
                 if (execOptions.IsOverwrite)
                 {
-                    File.Delete(srcVrmFilePath);
-                    File.Move(dstVrmFilePath, srcVrmFilePath);
+                    File.Delete(srcGlbFilePath);
+                    File.Move(dstGlbFilePath, srcGlbFilePath);
                 }
             }
 
@@ -945,7 +986,7 @@ namespace RecompressPng
             }
             else
             {
-                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcVrmFilePath : dstVrmFilePath).Length;
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcGlbFilePath : dstGlbFilePath).Length;
                 _logger.Info(
                     "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
@@ -1163,13 +1204,13 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Count PNG files and print its full name in the VRM file.
+        /// Count PNG files and print its full name in the GLB file.
         /// </summary>
-        /// <param name="vrmFilePath">Target VRM file.</param>
-        private static void CountPngInVrm(string vrmFilePath)
+        /// <param name="vrmFilePath">Target GLB file.</param>
+        private static void CountPngInGlb(string vrmFilePath)
         {
-            var (_, glbChunks) = VRMUtil.ParseChunk(vrmFilePath);
-            var (_, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+            var (_, glbChunks) = GlbUtil.ParseChunk(vrmFilePath);
+            var (_, binaryBuffers, imageIndexes) = GlbUtil.ParseGltf(glbChunks);
 
             var totalPngFiles = 0;
             var totalPngFileSize = 0L;
@@ -1398,7 +1439,7 @@ namespace RecompressPng
                     using var idatMs = new MemoryStream((int)srcPngStream.Length);
                     do
                     {
-                        idatMs.Write(pngChunk.Data);
+                        idatMs.Write(pngChunk.Data, 0, pngChunk.Data.Length);
                         pngChunk = PngChunk.ReadOneChunk(srcPngStream);
                     } while (pngChunk.Type == ChunkTypeIdat);
                     idatMs.Position = 0;
@@ -1411,9 +1452,9 @@ namespace RecompressPng
                         bw.Write(chunkTypeDataIdat);
                         bw.Write(idatData, 0, nRead);
 
-                        var crc32 = Crc32Calculator.Update(chunkTypeDataIdat);
-                        crc32 = Crc32Calculator.Update(idatData, 0, nRead, crc32);
-                        crc32 = Crc32Calculator.Finalize(crc32);
+                        var crc32 = Crc32Util.Update(chunkTypeDataIdat);
+                        crc32 = Crc32Util.Update(idatData, 0, nRead, crc32);
+                        crc32 = Crc32Util.Finalize(crc32);
                         bw.Write(BinaryPrimitives.ReverseEndianness(crc32));
                     }
                 }
