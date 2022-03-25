@@ -159,12 +159,12 @@ namespace RecompressPng
         /// <para><seealso href="https://www.intel.com/content/dam/www/public/us/en/documents/white-papers/fast-crc-computation-generic-polynomials-pclmulqdq-paper.pdf"/></para>
         /// <para><seealso href="https://chromium.googlesource.com/chromium/src/+/master/third_party/zlib/crc32_simd.c"/></para>
         /// </remarks>
-        private static uint UpdateSse41(ReadOnlySpan<byte> buf, uint crc32 = InitialValue)
+        private static uint UpdateSse41(ReadOnlySpan<byte> buf, uint crc = InitialValue)
         {
             var len = buf.Length;
             if (len < 64)
             {
-                return UpdateNaive(buf, crc32);
+                return UpdateNaive(buf, crc);
             }
 
             unsafe
@@ -174,7 +174,7 @@ namespace RecompressPng
                     var p = pp;
                     var x1 = Sse2.Xor(
                         Sse2.LoadVector128(p).AsUInt32(),
-                        Sse2.ConvertScalarToVector128UInt32(crc32));
+                        Sse2.ConvertScalarToVector128UInt32(crc));
                     var x2 = Sse2.LoadVector128(p + 16).AsUInt32();
                     var x3 = Sse2.LoadVector128(p + 32).AsUInt32();
                     var x4 = Sse2.LoadVector128(p + 48).AsUInt32();
@@ -252,7 +252,7 @@ namespace RecompressPng
 
                     // Barret reduce to 32-bits.
                     var poly = Vector128.Create(0x00000001db710641U, 0x0000001f7011641U);
-                    crc32 = Sse41.Extract(
+                    crc = Sse41.Extract(
                         Sse2.Xor(
                             x1,
                             Pclmulqdq.CarrylessMultiply(
@@ -270,7 +270,7 @@ namespace RecompressPng
                 }
             }
 
-            return len == 0 ? crc32 : UpdateNaive(buf[^len..], crc32);
+            return len == 0 ? crc : UpdateNaive(buf[^len..], crc);
         }
 
         /// <summary>
