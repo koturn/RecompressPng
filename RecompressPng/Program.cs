@@ -910,14 +910,21 @@ namespace RecompressPng
                     var bufferView = gltfJson["bufferViews"][i];
 
                     // byteOffset must be multiply of 4.
-                    nOffset = (nOffset + 0x3) & ~0x3;
                     bufferView["byteOffset"] = nOffset;
                     bufferView["byteLength"] = buffer.Length;
-                    nOffset += buffer.Length;
+                    nOffset = (nOffset + buffer.Length + 0x3) & ~0x3;
                 }
 
                 gltfJson["buffers"][0]["byteLength"] = nOffset;
-                var data = Encoding.UTF8.GetBytes(Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1"));
+                var jsonString = Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+                var jsonByteCount = Encoding.UTF8.GetByteCount(jsonString);
+                var jsonAlignedByteCount = (jsonByteCount + 0x3) & ~0x3;
+                var data = new byte[jsonAlignedByteCount];
+                Encoding.UTF8.GetBytes(jsonString, data);
+                for (int i = jsonByteCount; i < jsonAlignedByteCount; i++)
+                {
+                    data[i] = (byte)' ';
+                }
 
                 glbChunks[0].Data = data;
                 glbChunks[0].Length = data.Length;
@@ -936,13 +943,19 @@ namespace RecompressPng
                     // Write second chunk.
                     glbChunks[1].WriteTo(stream);
 
+                    ReadOnlySpan<byte> padding = stackalloc byte[4];
                     nOffset = 0;
                     foreach (var buf in binaryBuffers)
                     {
-                        var alignedOffset = (nOffset + 0x3) & ~0x3;
-                        stream.Position += alignedOffset - nOffset;
                         stream.Write(buf, 0, buf.Length);
-                        nOffset = alignedOffset + buf.Length;
+                        nOffset += buf.Length;
+                        var alignedOffset = (nOffset + 0x3) & ~0x3;
+                        var diff = alignedOffset - nOffset;
+                        if (diff > 0)
+                        {
+                            stream.Write(padding.Slice(0, diff));
+                        }
+                        nOffset = alignedOffset;
                     }
                 }
 
