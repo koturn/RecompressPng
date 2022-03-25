@@ -800,6 +800,18 @@ namespace RecompressPng
             var (glbHeader, glbChunks) = VRMUtil.ParseChunk(srcVrmFilePath);
             var (gltfJson, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
 
+            // Validate data length.
+            var fileSize = new FileInfo(srcVrmFilePath).Length;
+            if (glbHeader.Length != fileSize)
+            {
+                _logger.Warn($"The size described in the header differs from the actual file size. Expected: {glbHeader.Length} Bytes, Actual: {fileSize} Bytes");
+            }
+            var buffer0Length = (int)gltfJson["buffers"][0]["byteLength"];
+            if (buffer0Length != glbChunks[1].Length)
+            {
+                _logger.Warn($"The size described in the buffers[0].byteLength in the glTF json differs from the size of data of second chunk. Expected: {buffer0Length} Bytes, Actual: {glbChunks[1].Length} Bytes");
+            }
+
             int nProcPngFiles = 0;
             var srcFileSize = new FileInfo(srcVrmFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
