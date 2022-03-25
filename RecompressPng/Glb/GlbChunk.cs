@@ -2,7 +2,7 @@
 using System.Text;
 
 
-namespace RecompressPng.VRM
+namespace RecompressPng.Glb
 {
     /// <summary>
     /// Chunk of GLB.

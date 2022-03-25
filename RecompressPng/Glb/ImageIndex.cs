@@ -1,4 +1,4 @@
-﻿namespace RecompressPng.VRM
+﻿namespace RecompressPng.Glb
 {
     /// <summary>
     /// Element of an array of "images" node.

@@ -6,12 +6,12 @@ using System.Json;
 using System.Linq;
 
 
-namespace RecompressPng.VRM
+namespace RecompressPng.Glb
 {
     /// <summary>
     /// Utility class of VRM/GLB.
     /// </summary>
-    public static class VRMUtil
+    public static class GlbUtil
     {
         /// <summary>
         /// Split header and chunks in GLB file.

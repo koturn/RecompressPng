@@ -19,7 +19,7 @@ using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
 using NLog;
 using ZopfliSharp;
-using RecompressPng.VRM;
+using RecompressPng.Glb;
 
 
 namespace RecompressPng
@@ -127,11 +127,11 @@ namespace RecompressPng
                     {
                         if (execOptions.IsCountOnly)
                         {
-                            CountPngInVrm(target);
+                            CountPngInGlb(target);
                         }
                         else
                         {
-                            RecompressPngInVrm(target, null, pngOptions, execOptions);
+                            RecompressPngInGlb(target, null, pngOptions, execOptions);
                         }
                     }
                     else
@@ -782,26 +782,26 @@ namespace RecompressPng
         /// <summary>
         /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
         /// </summary>
-        /// <param name="srcVrmFilePath">Source zip archive file.</param>
-        /// <param name="dstVrmFilePath">Destination zip archive file.</param>
+        /// <param name="srcGlbFilePath">Source GLB file.</param>
+        /// <param name="dstGlbFilePath">Destination GLB file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInVrm(string srcVrmFilePath, string? dstVrmFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInGlb(string srcGlbFilePath, string? dstGlbFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
         {
-            dstVrmFilePath ??= Path.Combine(
-                Path.GetDirectoryName(srcVrmFilePath) ?? ".",
-                Path.GetFileNameWithoutExtension(srcVrmFilePath) + ".zopfli" + Path.GetExtension(srcVrmFilePath));
+            dstGlbFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcGlbFilePath) ?? ".",
+                Path.GetFileNameWithoutExtension(srcGlbFilePath) + ".zopfli" + Path.GetExtension(srcGlbFilePath));
 
-            if (File.Exists(dstVrmFilePath))
+            if (File.Exists(dstGlbFilePath))
             {
-                File.Delete(dstVrmFilePath);
+                File.Delete(dstGlbFilePath);
             }
 
-            var (glbHeader, glbChunks) = VRMUtil.ParseChunk(srcVrmFilePath);
-            var (gltfJson, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+            var (glbHeader, glbChunks) = GlbUtil.ParseChunk(srcGlbFilePath);
+            var (gltfJson, binaryBuffers, imageIndexes) = GlbUtil.ParseGltf(glbChunks);
 
             // Validate data length.
-            var fileSize = new FileInfo(srcVrmFilePath).Length;
+            var fileSize = new FileInfo(srcGlbFilePath).Length;
             if (glbHeader.Length != fileSize)
             {
                 _logger.Warn($"The size described in the header differs from the actual file size. Expected: {glbHeader.Length} Bytes, Actual: {fileSize} Bytes");
@@ -813,13 +813,13 @@ namespace RecompressPng
             }
 
             int nProcPngFiles = 0;
-            var srcFileSize = new FileInfo(srcVrmFilePath).Length;
+            var srcFileSize = new FileInfo(srcGlbFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
             var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
             // Overwrite options.
-            // PNG file in VRM file doesn't have its timestamp.
+            // PNG file in GLB file doesn't have its timestamp.
             execOptions = (ExecuteOptions)execOptions.Clone();
             execOptions.TextCreationTimeFormat = null;
             execOptions.IsAddTimeChunk = false;
@@ -934,7 +934,7 @@ namespace RecompressPng
                 glbChunks[1].Length = nOffset;
                 glbHeader.Length = sizeof(uint) * 3 + sizeof(uint) * 2 * 2 + glbChunks[0].Length + glbChunks[1].Length;
 
-                using (var stream = new FileStream(dstVrmFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                using (var stream = new FileStream(dstGlbFilePath, FileMode.Create, FileAccess.Write, FileShare.Read))
                 {
                     // Write header.
                     glbHeader.WriteTo(stream);
@@ -961,8 +961,8 @@ namespace RecompressPng
 
                 if (execOptions.IsOverwrite)
                 {
-                    File.Delete(srcVrmFilePath);
-                    File.Move(dstVrmFilePath, srcVrmFilePath);
+                    File.Delete(srcGlbFilePath);
+                    File.Move(dstGlbFilePath, srcGlbFilePath);
                 }
             }
 
@@ -979,7 +979,7 @@ namespace RecompressPng
             }
             else
             {
-                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcVrmFilePath : dstVrmFilePath).Length;
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcGlbFilePath : dstGlbFilePath).Length;
                 _logger.Info(
                     "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
                     ToMiB(srcFileSize),
@@ -1197,13 +1197,13 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Count PNG files and print its full name in the VRM file.
+        /// Count PNG files and print its full name in the GLB file.
         /// </summary>
-        /// <param name="vrmFilePath">Target VRM file.</param>
-        private static void CountPngInVrm(string vrmFilePath)
+        /// <param name="vrmFilePath">Target GLB file.</param>
+        private static void CountPngInGlb(string vrmFilePath)
         {
-            var (_, glbChunks) = VRMUtil.ParseChunk(vrmFilePath);
-            var (_, binaryBuffers, imageIndexes) = VRMUtil.ParseGltf(glbChunks);
+            var (_, glbChunks) = GlbUtil.ParseChunk(vrmFilePath);
+            var (_, binaryBuffers, imageIndexes) = GlbUtil.ParseGltf(glbChunks);
 
             var totalPngFiles = 0;
             var totalPngFileSize = 0L;
