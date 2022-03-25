@@ -49,6 +49,7 @@ namespace RecompressPng.VRM
         /// <summary>
         /// Parse json of glTF.
         /// </summary>
+        /// <returns><see cref="ValueTuple"/> of glTF json, list of buffers and imageIndexes.</returns>
         public static (JsonValue GltfJson, List<byte[]> BinaryBuffers, List<ImageIndex> ImageIndexes) ParseGltf(List<GlbChunk> glbChunks)
         {
             if (glbChunks[0].ChunkType != GlbChunkType.Json)
@@ -73,16 +74,7 @@ namespace RecompressPng.VRM
             {
                 throw new ArgumentNullException(nameof(data1), "Second GLB chunk data is null.");
             }
-            var binaryBuffers = new List<byte[]>(bufferViews.Count);
-            binaryBuffers.AddRange(bufferViews.Select(bv =>
-            {
-                var buffer = new byte[bv["byteLength"]];
-                Array.Copy(data1, bv["byteOffset"], buffer, 0, buffer.Length);
-
-                return buffer;
-            }));
-
-            glbChunks[1].Data = null;
+            var binaryBuffers = SplitBuffer(data1, bufferViews);
 
             var images = (JsonArray)gltfJson["images"];
             var imageIndexes = new List<ImageIndex>(images.Count);
@@ -90,6 +82,7 @@ namespace RecompressPng.VRM
 
             return (gltfJson, binaryBuffers, imageIndexes);
         }
+
 
         /// <summary>
         /// Load json data.
@@ -100,6 +93,24 @@ namespace RecompressPng.VRM
         {
             using var ms = new MemoryStream(jsonData);
             return JsonValue.Load(ms);
+        }
+
+        /// <summary>
+        /// Split second chunk data of GLB.
+        /// </summary>
+        /// <param name="wholeBuffer">Data of second chunk.</param>
+        /// <param name="bufferViews">JSON value of "bufferViews".</param>
+        /// <returns>List of split buffers.</returns>
+        private static List<byte[]> SplitBuffer(byte[] wholeBuffer, JsonArray bufferViews)
+        {
+            var binaryBuffers = new List<byte[]>(bufferViews.Count);
+            binaryBuffers.AddRange(bufferViews.Select(bv =>
+            {
+                var buffer = new byte[bv["byteLength"]];
+                Buffer.BlockCopy(wholeBuffer, bv["byteOffset"], buffer, 0, buffer.Length);
+                return buffer;
+            }));
+            return binaryBuffers;
         }
     }
 }

@@ -910,6 +910,8 @@ namespace RecompressPng
                 glbChunks[0].Data = data;
                 glbChunks[0].Length = data.Length;
 
+                // Discard original binary data.
+                glbChunks[1].Data = null;
                 glbChunks[1].Length = nOffset;
                 glbHeader.Length = sizeof(uint) * 3 + sizeof(uint) * 2 * 2 + glbChunks[0].Length + glbChunks[1].Length;
 
