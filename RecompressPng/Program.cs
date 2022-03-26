@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Security;
@@ -912,13 +913,13 @@ namespace RecompressPng
                     // byteOffset must be multiply of 4.
                     bufferView["byteOffset"] = nOffset;
                     bufferView["byteLength"] = buffer.Length;
-                    nOffset = (nOffset + buffer.Length + 0x3) & ~0x3;
+                    nOffset = RoundUpToMultiplyOf4(nOffset + buffer.Length);
                 }
 
                 gltfJson["buffers"][0]["byteLength"] = nOffset;
-                var jsonString = Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+                var jsonString = MinifyJson(gltfJson.ToString());
                 var jsonByteCount = Encoding.UTF8.GetByteCount(jsonString);
-                var jsonAlignedByteCount = (jsonByteCount + 0x3) & ~0x3;
+                var jsonAlignedByteCount = RoundUpToMultiplyOf4(jsonByteCount);
                 var data = new byte[jsonAlignedByteCount];
                 Encoding.UTF8.GetBytes(jsonString, data);
                 for (int i = jsonByteCount; i < jsonAlignedByteCount; i++)
@@ -949,7 +950,7 @@ namespace RecompressPng
                     {
                         stream.Write(buf, 0, buf.Length);
                         nOffset += buf.Length;
-                        var alignedOffset = (nOffset + 0x3) & ~0x3;
+                        var alignedOffset = RoundUpToMultiplyOf4(nOffset);
                         var diff = alignedOffset - nOffset;
                         if (diff > 0)
                         {
@@ -1565,10 +1566,33 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Round up to multiply of 4.
+        /// </summary>
+        /// <param name="n">A value to round up.</param>
+        /// <returns>Rounded up value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int RoundUpToMultiplyOf4(int n)
+        {
+            return (n + 0x3) & ~0x3;
+        }
+
+        /// <summary>
+        /// Minify json, remove unneccessary whitespaces.
+        /// </summary>
+        /// <param name="json">A json to minify.</param>
+        /// <returns>Minified json.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static string MinifyJson(string json)
+        {
+            return Regex.Replace(json, "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+        }
+
+        /// <summary>
         /// Converts a number in bytes to a number in MiB.
         /// </summary>
         /// <param name="byteSize">A number in bytes.</param>
         /// <returns>A number in MiB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static double ToMiB(long byteSize)
         {
             return byteSize / 1024.0 / 1024.0;
@@ -1580,6 +1604,7 @@ namespace RecompressPng
         /// <param name="originalSize">Original size.</param>
         /// <param name="compressedSize">Compressed size.</param>
         /// <returns>Deflated rete.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
             return originalSize == 0L ? 0.0 : (1.0 - (double)compressedSize / originalSize);
