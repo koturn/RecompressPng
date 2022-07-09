@@ -468,7 +468,6 @@ namespace RecompressPng
 
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         var sw = Stopwatch.StartNew();
-                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var data = ReadAllBytes(srcEntry, srcLock);
@@ -485,6 +484,8 @@ namespace RecompressPng
                                 CopyZipEntry(srcEntry);
                                 return;
                             }
+
+                            _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
 
                             // Take a long time
                             using var compressedData = ZopfliPng.OptimizePngUnmanaged(
@@ -647,7 +648,6 @@ namespace RecompressPng
 
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         var sw = Stopwatch.StartNew();
-                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var (data, dataLength) = ReadAllBytesRestrict(srcEntry, lockObj);
@@ -662,6 +662,8 @@ namespace RecompressPng
                                 _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
                                 return;
                             }
+
+                            _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
 
                             // Take a long time
                             using var compressedData = ZopfliPng.OptimizePngUnmanaged(
@@ -856,7 +858,6 @@ namespace RecompressPng
                     var procIndex = Interlocked.Increment(ref nProcPngFiles);
 
                     var displayName = $"[{imageIndex.Index}] {imageIndex.Name}";
-                    _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
                     try
                     {
                         if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
@@ -864,6 +865,8 @@ namespace RecompressPng
                             _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
                             return;
                         }
+
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
 
                         // Take a long time
                         using var compressedData = ZopfliPng.OptimizePngUnmanaged(
@@ -1071,7 +1074,6 @@ namespace RecompressPng
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
                             .ToString());
 
-                    _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
                     try
                     {
                         var data = File.ReadAllBytes(srcFilePath);
@@ -1086,6 +1088,8 @@ namespace RecompressPng
                             _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcRelPath);
                             return;
                         }
+
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
 
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
