@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Security;
@@ -233,6 +234,7 @@ namespace RecompressPng
                 + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
                 + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
+            ap.Add("ignore-single-idat-png", "Don't pricess PNG files with a single IDAT chunk.");
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "Keep metadata chunks with these names that would normally be removed,\n"
                 + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
@@ -323,6 +325,7 @@ namespace RecompressPng
                     !ap.GetValue<bool>("no-overwrite"),
                     ap.GetValue<bool>('r'),
                     !ap.GetValue<bool>("no-keep-timestamp"),
+                    ap.GetValue<bool>("ignore-single-idat-png"),
                     ap.GetValue<int>("idat-size"),
                     isAddCt ? ctFormat : "",
                     ap.GetValue<bool>("add-time"),
@@ -384,6 +387,7 @@ namespace RecompressPng
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
             Console.WriteLine($"Keep Timestamp: {execOptions.IsKeepTimestamp}");
+            Console.WriteLine($"Ignore Single IDAT PNG: {execOptions.IsIgnoreSingleIdatPng}");
             Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
@@ -471,7 +475,6 @@ namespace RecompressPng
 
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         var sw = Stopwatch.StartNew();
-                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var data = ReadAllBytes(srcEntry, srcLock);
@@ -481,6 +484,15 @@ namespace RecompressPng
                                 CopyZipEntry(srcEntry);
                                 return;
                             }
+
+                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
+                                CopyZipEntry(srcEntry);
+                                return;
+                            }
+
+                            _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
 
                             // Take a long time
                             using var compressedData = ZopfliPng.OptimizePngUnmanaged(
@@ -643,7 +655,6 @@ namespace RecompressPng
 
                         var procIndex = Interlocked.Increment(ref nProcPngFiles);
                         var sw = Stopwatch.StartNew();
-                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
                         try
                         {
                             var (data, dataLength) = ReadAllBytesRestrict(srcEntry, lockObj);
@@ -652,6 +663,14 @@ namespace RecompressPng
                                 _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
                                 return;
                             }
+
+                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
+                                return;
+                            }
+
+                            _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
 
                             // Take a long time
                             using var compressedData = ZopfliPng.OptimizePngUnmanaged(
@@ -846,9 +865,16 @@ namespace RecompressPng
                     var procIndex = Interlocked.Increment(ref nProcPngFiles);
 
                     var displayName = $"[{imageIndex.Index}] {imageIndex.Name}";
-                    _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
                     try
                     {
+                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        {
+                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
+                            return;
+                        }
+
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
+
                         // Take a long time
                         using var compressedData = ZopfliPng.OptimizePngUnmanaged(
                             data,
@@ -919,13 +945,13 @@ namespace RecompressPng
                     // byteOffset must be multiply of 4.
                     bufferView["byteOffset"] = nOffset;
                     bufferView["byteLength"] = buffer.Length;
-                    nOffset = (nOffset + buffer.Length + 0x3) & ~0x3;
+                    nOffset = RoundUpToMultiplyOf4(nOffset + buffer.Length);
                 }
 
                 gltfJson["buffers"][0]["byteLength"] = nOffset;
-                var jsonString = Regex.Replace(gltfJson.ToString(), "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+                var jsonString = MinifyJson(gltfJson.ToString());
                 var jsonByteCount = Encoding.UTF8.GetByteCount(jsonString);
-                var jsonAlignedByteCount = (jsonByteCount + 0x3) & ~0x3;
+                var jsonAlignedByteCount = RoundUpToMultiplyOf4(jsonByteCount);
                 var data = new byte[jsonAlignedByteCount];
                 Encoding.UTF8.GetBytes(jsonString, data);
                 for (int i = jsonByteCount; i < jsonAlignedByteCount; i++)
@@ -956,7 +982,7 @@ namespace RecompressPng
                     {
                         stream.Write(buf, 0, buf.Length);
                         nOffset += buf.Length;
-                        var alignedOffset = (nOffset + 0x3) & ~0x3;
+                        var alignedOffset = RoundUpToMultiplyOf4(nOffset);
                         var diff = alignedOffset - nOffset;
                         if (diff > 0)
                         {
@@ -1055,7 +1081,6 @@ namespace RecompressPng
                             .Replace(srcBaseDirFullPath + @"\", "", 0, srcBaseDirFullPath.Length + 1)
                             .ToString());
 
-                    _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
                     try
                     {
                         var data = File.ReadAllBytes(srcFilePath);
@@ -1064,6 +1089,15 @@ namespace RecompressPng
                             _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcRelPath);
                             return;
                         }
+
+                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        {
+                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcRelPath);
+                            return;
+                        }
+
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
+
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                         // Take a long time
@@ -1365,6 +1399,60 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Count how many IDAT chunks are in the PNG data.
+        /// </summary>
+        /// <param name="pngData">Source PNG data.</param>
+        /// <returns>The number of IDAT chunks in specified PNG data.</returns>
+        static int CountIdatChunk(ReadOnlySpan<byte> pngData)
+        {
+            unsafe
+            {
+                fixed (byte* p = pngData)
+                {
+                    using var ums = new UnmanagedMemoryStream(p, pngData.Length);
+                    return CountIdatChunk(ums);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Count how many IDAT chunks are in the PNG stream.
+        /// </summary>
+        /// <param name="pngStream">Source PNG stream.</param>
+        /// <returns>The number of IDAT chunks in specified PNG stream.</returns>
+        static int CountIdatChunk(Stream pngStream)
+        {
+            Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
+            if (pngStream.Read(pngSignature) < pngSignature.Length)
+            {
+                throw new Exception("Source PNG file data is too small.");
+            }
+
+            if (!HasPngSignature(pngSignature))
+            {
+                var sb = new StringBuilder();
+                foreach (var b in pngSignature)
+                {
+                    sb.Append($" {b:2X}");
+                }
+                throw new InvalidDataException($"Invalid PNG signature:{sb}");
+            }
+
+            PngChunk pngChunk;
+            int cnt = 0;
+            do
+            {
+                pngChunk = PngChunk.ReadOneChunk(pngStream);
+                if (pngChunk.Type == ChunkTypeIdat)
+                {
+                    cnt++;
+                }
+            } while (pngChunk.Type != ChunkTypeIend);
+
+            return cnt;
+        }
+
+        /// <summary>
         /// Split IDAT chunk or add tEXt chunk whose key is "Creation Time".
         /// </summary>
         /// <param name="pngData">Source PNG data.</param>
@@ -1572,10 +1660,33 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Round up to multiply of 4.
+        /// </summary>
+        /// <param name="n">A value to round up.</param>
+        /// <returns>Rounded up value.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int RoundUpToMultiplyOf4(int n)
+        {
+            return (n + 0x3) & ~0x3;
+        }
+
+        /// <summary>
+        /// Minify json, remove unneccessary whitespaces.
+        /// </summary>
+        /// <param name="json">A json to minify.</param>
+        /// <returns>Minified json.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static string MinifyJson(string json)
+        {
+            return Regex.Replace(json, "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+        }
+
+        /// <summary>
         /// Converts a number in bytes to a number in MiB.
         /// </summary>
         /// <param name="byteSize">A number in bytes.</param>
         /// <returns>A number in MiB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static double ToMiB(long byteSize)
         {
             return byteSize / 1024.0 / 1024.0;
@@ -1587,6 +1698,7 @@ namespace RecompressPng
         /// <param name="originalSize">Original size.</param>
         /// <param name="compressedSize">Compressed size.</param>
         /// <returns>Deflated rete.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static double CalcDeflatedRate(long originalSize, long compressedSize)
         {
             return originalSize == 0L ? 0.0 : (1.0 - (double)compressedSize / originalSize);
