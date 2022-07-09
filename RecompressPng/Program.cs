@@ -234,6 +234,7 @@ namespace RecompressPng
                 + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
                 + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
+            ap.Add("ignore-single-idat-png", "Don't pricess PNG files with a single IDAT chunk.");
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "Keep metadata chunks with these names that would normally be removed,\n"
                 + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
@@ -318,6 +319,7 @@ namespace RecompressPng
                     !ap.GetValue<bool>("no-overwrite"),
                     ap.GetValue<bool>('r'),
                     !ap.GetValue<bool>("no-keep-timestamp"),
+                    ap.GetValue<bool>("ignore-single-idat-png"),
                     ap.GetValue<int>("idat-size"),
                     isAddCt ? ctFormat : "",
                     ap.GetValue<bool>("add-time"),
@@ -378,6 +380,7 @@ namespace RecompressPng
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
             Console.WriteLine($"Keep Timestamp: {execOptions.IsKeepTimestamp}");
+            Console.WriteLine($"Ignore Single IDAT PNG: {execOptions.IsIgnoreSingleIdatPng}");
             Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
@@ -472,6 +475,13 @@ namespace RecompressPng
                             if (!HasPngSignature(data))
                             {
                                 _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
+                                CopyZipEntry(srcEntry);
+                                return;
+                            }
+
+                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
                                 CopyZipEntry(srcEntry);
                                 return;
                             }
@@ -644,6 +654,12 @@ namespace RecompressPng
                             if (!HasPngSignature(data))
                             {
                                 _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcEntry.FullName);
+                                return;
+                            }
+
+                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
                                 return;
                             }
 
@@ -843,6 +859,12 @@ namespace RecompressPng
                     _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
                     try
                     {
+                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        {
+                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
+                            return;
+                        }
+
                         // Take a long time
                         using var compressedData = ZopfliPng.OptimizePngUnmanaged(
                             data,
@@ -1058,6 +1080,13 @@ namespace RecompressPng
                             _logger.Error("[{0}] Compress {1} failed, invalid PNG signature", procIndex, srcRelPath);
                             return;
                         }
+
+                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        {
+                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcRelPath);
+                            return;
+                        }
+
                         var originalTimestamp = new FileInfo(srcFilePath).LastWriteTime;
 
                         // Take a long time
@@ -1356,6 +1385,60 @@ namespace RecompressPng
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Count how many IDAT chunks are in the PNG data.
+        /// </summary>
+        /// <param name="pngData">Source PNG data.</param>
+        /// <returns>The number of IDAT chunks in specified PNG data.</returns>
+        static int CountIdatChunk(ReadOnlySpan<byte> pngData)
+        {
+            unsafe
+            {
+                fixed (byte* p = pngData)
+                {
+                    using var ums = new UnmanagedMemoryStream(p, pngData.Length);
+                    return CountIdatChunk(ums);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Count how many IDAT chunks are in the PNG stream.
+        /// </summary>
+        /// <param name="pngStream">Source PNG stream.</param>
+        /// <returns>The number of IDAT chunks in specified PNG stream.</returns>
+        static int CountIdatChunk(Stream pngStream)
+        {
+            Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
+            if (pngStream.Read(pngSignature) < pngSignature.Length)
+            {
+                throw new Exception("Source PNG file data is too small.");
+            }
+
+            if (!HasPngSignature(pngSignature))
+            {
+                var sb = new StringBuilder();
+                foreach (var b in pngSignature)
+                {
+                    sb.Append($" {b:2X}");
+                }
+                throw new InvalidDataException($"Invalid PNG signature:{sb}");
+            }
+
+            PngChunk pngChunk;
+            int cnt = 0;
+            do
+            {
+                pngChunk = PngChunk.ReadOneChunk(pngStream);
+                if (pngChunk.Type == ChunkTypeIdat)
+                {
+                    cnt++;
+                }
+            } while (pngChunk.Type != ChunkTypeIend);
+
+            return cnt;
         }
 
         /// <summary>
