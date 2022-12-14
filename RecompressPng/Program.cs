@@ -234,7 +234,11 @@ namespace RecompressPng
                 + indent2 + "The IDAT is splitted so that the data part of the IDAT becomes the specified size.\n"
                 + indent2 + "0 or negative value means no splitting",
                 "SIZE", -1);
-            ap.Add("ignore-single-idat-png", "Don't pricess PNG files with a single IDAT chunk.");
+            ap.Add("ignore-single-idat-size", OptionType.RequiredArgument,
+                "Don't process PNG files with a single IDAT chunk which IDAT chunk size is larger than the specified size.\n"
+                + indent2 + "Negative values mean that PNG files with a single IDAT of any size will be processed.",
+                "SIZE",
+                -1L);
             ap.Add("keep-chunks", OptionType.RequiredArgument,
                 "Keep metadata chunks with these names that would normally be removed,\n"
                 + indent3 + "e.g. tEXt,zTXt,iTXt,gAMA, ... \n"
@@ -319,7 +323,7 @@ namespace RecompressPng
                     !ap.GetValue<bool>("no-overwrite"),
                     ap.GetValue<bool>('r'),
                     !ap.GetValue<bool>("no-keep-timestamp"),
-                    ap.GetValue<bool>("ignore-single-idat-png"),
+                    ap.GetValue<long>("ignore-single-idat-size"),
                     ap.GetValue<int>("idat-size"),
                     isAddCt ? ctFormat : "",
                     ap.GetValue<bool>("add-time"),
@@ -380,7 +384,7 @@ namespace RecompressPng
             Console.WriteLine($"Overwrite: {execOptions.IsOverwrite}");
             Console.WriteLine($"Replace Force: {execOptions.IsReplaceForce}");
             Console.WriteLine($"Keep Timestamp: {execOptions.IsKeepTimestamp}");
-            Console.WriteLine($"Ignore Single IDAT PNG: {execOptions.IsIgnoreSingleIdatPng}");
+            Console.WriteLine($"Ignore Single IDAT Size: {execOptions.IgnoreSingleIdatSize}");
             Console.WriteLine($"Dry Run: {execOptions.IsDryRun}");
             Console.WriteLine($"Verbose: {execOptions.Verbose}");
             Console.WriteLine($"Verify Image: {execOptions.IsVerifyImage}");
@@ -478,11 +482,14 @@ namespace RecompressPng
                                 return;
                             }
 
-                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            if (execOptions.IgnoreSingleIdatSize >= 0)
                             {
-                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
-                                CopyZipEntry(srcEntry);
-                                return;
+                                var idatCntSize = CountAndGetTotalSizeOfIdatChunks(data);
+                                if (idatCntSize.Count == 1 && idatCntSize.TotalIdatSize >= execOptions.IgnoreSingleIdatSize)
+                                {
+                                    _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
+                                    return;
+                                }
                             }
 
                             _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
@@ -657,10 +664,14 @@ namespace RecompressPng
                                 return;
                             }
 
-                            if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                            if (execOptions.IgnoreSingleIdatSize >= 0)
                             {
-                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
-                                return;
+                                var idatCntSize = CountAndGetTotalSizeOfIdatChunks(data);
+                                if (idatCntSize.Count == 1 && idatCntSize.TotalIdatSize >= execOptions.IgnoreSingleIdatSize)
+                                {
+                                    _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcEntry.FullName);
+                                    return;
+                                }
                             }
 
                             _logger.Info("[{0}] Compress {1} ...", procIndex, srcEntry.FullName);
@@ -860,10 +871,14 @@ namespace RecompressPng
                     var displayName = $"[{imageIndex.Index}] {imageIndex.Name}";
                     try
                     {
-                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        if (execOptions.IgnoreSingleIdatSize >= 0)
                         {
-                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
-                            return;
+                            var idatCntSize = CountAndGetTotalSizeOfIdatChunks(data);
+                            if (idatCntSize.Count == 1 && idatCntSize.TotalIdatSize >= execOptions.IgnoreSingleIdatSize)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
+                                return;
+                            }
                         }
 
                         _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
@@ -1083,10 +1098,14 @@ namespace RecompressPng
                             return;
                         }
 
-                        if (execOptions.IsIgnoreSingleIdatPng && CountIdatChunk(data) == 1)
+                        if (execOptions.IgnoreSingleIdatSize >= 0)
                         {
-                            _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcRelPath);
-                            return;
+                            var idatCntSize = CountAndGetTotalSizeOfIdatChunks(data);
+                            if (idatCntSize.Count == 1 && idatCntSize.TotalIdatSize >= execOptions.IgnoreSingleIdatSize)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, srcRelPath);
+                                return;
+                            }
                         }
 
                         _logger.Info("[{0}] Compress {1} ...", procIndex, srcRelPath);
@@ -1395,8 +1414,8 @@ namespace RecompressPng
         /// Count how many IDAT chunks are in the PNG data.
         /// </summary>
         /// <param name="pngData">Source PNG data.</param>
-        /// <returns>The number of IDAT chunks in specified PNG data.</returns>
-        static int CountIdatChunk(ReadOnlySpan<byte> pngData)
+        /// <returns>Tuple of the number of IDAT chunks in specified PNG data and the total size of IDAT chunks.</returns>
+        static (int Count, long TotalIdatSize) CountAndGetTotalSizeOfIdatChunks(ReadOnlySpan<byte> pngData)
         {
             unsafe
             {
@@ -1413,7 +1432,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="pngStream">Source PNG stream.</param>
         /// <returns>The number of IDAT chunks in specified PNG stream.</returns>
-        static int CountIdatChunk(Stream pngStream)
+        static (int Count, long TotalIdatSize) CountIdatChunk(Stream pngStream)
         {
             Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
             if (pngStream.Read(pngSignature) < pngSignature.Length)
@@ -1433,16 +1452,18 @@ namespace RecompressPng
 
             PngChunk pngChunk;
             int cnt = 0;
+            long totalIdatSize = 0L;
             do
             {
                 pngChunk = PngChunk.ReadOneChunk(pngStream);
                 if (pngChunk.Type == ChunkTypeIdat)
                 {
                     cnt++;
+                    totalIdatSize += pngChunk.Data.LongLength;
                 }
             } while (pngChunk.Type != ChunkTypeIend);
 
-            return cnt;
+            return (cnt, totalIdatSize);
         }
 
         /// <summary>
