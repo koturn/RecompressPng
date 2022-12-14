@@ -30,9 +30,9 @@ namespace RecompressPng
         /// </summary>
         public bool IsKeepTimestamp { get; set; }
         /// <summary>
-        /// Ignore PNG files with single IDAT chunk.
+        /// Minimum size of a single IDAT chunk to be excluded from processing.
         /// </summary>
-        public bool IsIgnoreSingleIdatPng { get; set; }
+        public long IgnoreSingleIdatSize { get; set; }
         /// <summary>
         /// Size of each data part of IDAT chunk.
         /// </summary>
@@ -90,7 +90,7 @@ namespace RecompressPng
         /// <param name="isOverwrite">Overwrite original files.</param>
         /// <param name="isReplaceForce">Do the replacement even if the size of the recompressed data is larger than the size of the original data.</param>
         /// <param name="isKeepTimestamp">Keep timestamp of original file.</param>
-        /// <param name="isIgnoreSingleIdatPng">Ignore PNG files with single IDAT chunk.</param>
+        /// <param name="ignoreSingleIdatSize">Minimum size of a single IDAT chunk to be excluded from processing.</param>
         /// <param name="idatSize">Size of each data part of IDAT chunk.</param>
         /// <param name="textCreationTimeFormat">Format string of <see cref="DateTime"/> for value of Creation Time of tEXt chunk.</param>
         /// <param name="isAddTimeChunk">Whether add tIME chunk or not.</param>
@@ -105,7 +105,7 @@ namespace RecompressPng
             bool isOverwrite = false,
             bool isReplaceForce = false,
             bool isKeepTimestamp = true,
-            bool isIgnoreSingleIdatPng = false,
+            long ignoreSingleIdatSize = -1,
             int idatSize = -1,
             string? textCreationTimeFormat = null,
             bool isAddTimeChunk = false,
@@ -119,7 +119,7 @@ namespace RecompressPng
             IsOverwrite = isOverwrite;
             IsReplaceForce = isReplaceForce;
             IsKeepTimestamp = isKeepTimestamp;
-            IsIgnoreSingleIdatPng = isIgnoreSingleIdatPng;
+            IgnoreSingleIdatSize = ignoreSingleIdatSize;
             IdatSize = idatSize;
             TextCreationTimeFormat = textCreationTimeFormat;
             IsAddTimeChunk = isAddTimeChunk;
@@ -141,7 +141,7 @@ namespace RecompressPng
                 IsOverwrite,
                 IsReplaceForce,
                 IsKeepTimestamp,
-                IsIgnoreSingleIdatPng,
+                IgnoreSingleIdatSize,
                 IdatSize,
                 TextCreationTimeFormat,
                 IsAddTimeChunk,
