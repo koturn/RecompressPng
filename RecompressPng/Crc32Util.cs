@@ -286,7 +286,7 @@ namespace RecompressPng
 
         /// <summary>
         /// Generate CRC-32 value.
-        /// This method only used in <see cref="GenerateTable"/>.
+        /// This method only used in <see cref="GetTable"/>.
         /// </summary>
         /// <returns>CRC-32 table.</returns>
         /// <remarks>
