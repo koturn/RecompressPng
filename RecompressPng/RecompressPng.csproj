@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
@@ -11,7 +11,7 @@
     <PackageProjectUrl>https://github.com/koturn/RecompressPng</PackageProjectUrl>
     <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>1.6.1.0</Version>
+    <Version>1.6.2.0</Version>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
@@ -26,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NLog" Version="4.7.14" />
-    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+    <PackageReference Include="NLog" Version="5.3.3" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
     <PackageReference Include="System.Json" Version="4.7.1" />
   </ItemGroup>
 
