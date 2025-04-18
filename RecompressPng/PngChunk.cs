@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using Koturn.Zopfli.Checksums;
 
 
 namespace RecompressPng

@@ -20,6 +20,7 @@ using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
 using NLog;
 using Koturn.Zopfli;
+using Koturn.Zopfli.Checksums;
 using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
 
