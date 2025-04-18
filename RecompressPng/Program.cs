@@ -19,7 +19,8 @@ using System.Web;
 using ArgumentParserSharp;
 using ArgumentParserSharp.Exceptions;
 using NLog;
-using ZopfliSharp;
+using Koturn.Zopfli;
+using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
 
 
@@ -185,7 +186,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="args">Command-line arguments</param>
         /// <returns>Parse result tuple.</returns>
-        private static (string Target, ZopfliPNGOptions PngOptions, ExecuteOptions ExecOptions) ParseCommadLineArguments(string[] args)
+        private static (string Target, ZopfliPngOptions PngOptions, ExecuteOptions ExecOptions) ParseCommadLineArguments(string[] args)
         {
             var ap = new ArgumentParser()
             {
@@ -210,8 +211,8 @@ namespace RecompressPng
                 + indent2 + "A good set of filters to try is -f 0me.",
                 "0|1|2|3|4|m|e|p|b...");
             ap.AddHelp();
-            ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPNGOptions.DefaultNumIterations);
-            ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPNGOptions.DefaultNumIterationsLarge);
+            ap.Add('i', "num-iteration", OptionType.RequiredArgument, "Number of iteration.", "NUM", ZopfliPngOptions.DefaultNumIterations);
+            ap.Add('I', "num-iteration-large", OptionType.RequiredArgument, "Number of iterations on large images.", "NUM", ZopfliPngOptions.DefaultNumIterationsLarge);
             ap.Add('n', "num-thread", OptionType.RequiredArgument, "Number of threads for re-compressing. -1 means unlimited.", "N", ExecuteOptions.DefaultNumberOfThreads);
             ap.Add('q', "no-use-zopfli",
                 "Use quick, but not very good, compression.\n"
@@ -294,7 +295,7 @@ namespace RecompressPng
                 DateTime.Now.ToString(ctFormat);
             }
 
-            var zo = ZopfliPNGOptions.GetDefault();
+            var zo = ZopfliPngOptions.GetDefault();
             zo.NumIterations = ap.GetValue<int>('i');
             zo.NumIterationsLarge = ap.GetValue<int>('I');
             zo.LossyTransparent = ap.GetValue<bool>("lossy-transparent");
@@ -338,22 +339,22 @@ namespace RecompressPng
         /// Parse option value for "-s" or "--strategies".
         /// </summary>
         /// <param name="filterStrategiesString">Option value for "-s" or "--strategies".</param>
-        /// <returns>Enumeration of <see cref="ZopfliPNGFilterStrategy"/>.</returns>
-        private static IEnumerable<ZopfliPNGFilterStrategy> ParseFilterStrategiesString(string filterStrategiesString)
+        /// <returns>Enumeration of <see cref="ZopfliPngFilterStrategy"/>.</returns>
+        private static IEnumerable<ZopfliPngFilterStrategy> ParseFilterStrategiesString(string filterStrategiesString)
         {
             foreach (var c in filterStrategiesString)
             {
                 yield return c switch
                 {
-                    '0' => ZopfliPNGFilterStrategy.Zero,
-                    '1' => ZopfliPNGFilterStrategy.One,
-                    '2' => ZopfliPNGFilterStrategy.Two,
-                    '3' => ZopfliPNGFilterStrategy.Three,
-                    '4' => ZopfliPNGFilterStrategy.Four,
-                    'm' => ZopfliPNGFilterStrategy.MinSum,
-                    'e' => ZopfliPNGFilterStrategy.Entropy,
-                    'p' => ZopfliPNGFilterStrategy.Predefined,
-                    'b' => ZopfliPNGFilterStrategy.BruteForce,
+                    '0' => ZopfliPngFilterStrategy.Zero,
+                    '1' => ZopfliPngFilterStrategy.One,
+                    '2' => ZopfliPngFilterStrategy.Two,
+                    '3' => ZopfliPngFilterStrategy.Three,
+                    '4' => ZopfliPngFilterStrategy.Four,
+                    'm' => ZopfliPngFilterStrategy.MinSum,
+                    'e' => ZopfliPngFilterStrategy.Entropy,
+                    'p' => ZopfliPngFilterStrategy.Predefined,
+                    'b' => ZopfliPngFilterStrategy.BruteForce,
                     _ => throw new ArgumentException($"Invalid filter strategy character is specified: {c}", nameof(filterStrategiesString))
                 };
             }
@@ -364,7 +365,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="pngOptions">Options for zopflipng</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void ShowParameters(ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void ShowParameters(ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
         {
             var strategies = pngOptions.FilterStrategies is null ? "" : string.Join(", ", pngOptions.FilterStrategies);
             var keepChunks = pngOptions.KeepChunks is null ? "" : string.Join(", ", pngOptions.KeepChunks);
@@ -409,7 +410,7 @@ namespace RecompressPng
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchive(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchive(string srcZipFilePath, string? dstZipFilePath, ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcZipFilePath) ?? ".",
@@ -616,14 +617,14 @@ namespace RecompressPng
         /// <para>Re-compress all PNG files in zip archive using "zopfli" algorithm.</para>
         /// <para>Copy source zip file at first, then open the copied file and recompress PNG files.</para>
         /// <para>Since this method leaves entries other than PNG files untouched,
-        /// it may result in smaller zip files than <see cref="RecompressPngInZipArchive(string, string, ZopfliPNGOptions, ExecuteOptions)"/>
+        /// it may result in smaller zip files than <see cref="RecompressPngInZipArchive(string, string, ZopfliPngOptions, ExecuteOptions)"/>
         /// when targeting highly compressed zip files created with 7-zip or other efficient methods.</para>
         /// </summary>
         /// <param name="srcZipFilePath">Source zip archive file.</param>
         /// <param name="dstZipFilePath">Destination zip archive file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string? dstZipFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInZipArchiveCopyAndShrink(string srcZipFilePath, string? dstZipFilePath, ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
         {
             dstZipFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcZipFilePath) ?? ".",
@@ -816,7 +817,7 @@ namespace RecompressPng
         /// <param name="dstGlbFilePath">Destination GLB file.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInGlb(string srcGlbFilePath, string? dstGlbFilePath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInGlb(string srcGlbFilePath, string? dstGlbFilePath, ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
         {
             dstGlbFilePath ??= Path.Combine(
                 Path.GetDirectoryName(srcGlbFilePath) ?? ".",
@@ -1060,7 +1061,7 @@ namespace RecompressPng
         /// <param name="dstDirPath">Destination directory.</param>
         /// <param name="pngOptions">Options for zopflipng.</param>
         /// <param name="execOptions">Options for execution.</param>
-        private static void RecompressPngInDirectory(string srcDirPath, string? dstDirPath, ZopfliPNGOptions pngOptions, ExecuteOptions execOptions)
+        private static void RecompressPngInDirectory(string srcDirPath, string? dstDirPath, ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
         {
             dstDirPath ??= (srcDirPath + ".zopfli");
 

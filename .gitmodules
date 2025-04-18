@@ -2,8 +2,8 @@
 	path = NativeCodeSharp
 	url = https://github.com/koturn/NativeCodeSharp
 [submodule "ZopfliSharp"]
-	path = ZopfliSharp
-	url = https://github.com/koturn/ZopfliSharp
+	path = Koturn.Zopfli
+	url = https://github.com/koturn/Koturn.Zopfli
 [submodule "ArgumentParserSharp"]
 	path = ArgumentParserSharp
 	url = https://github.com/koturn/ArgumentParserSharp

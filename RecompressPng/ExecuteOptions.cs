@@ -47,8 +47,8 @@ namespace RecompressPng
         /// </summary>
         public bool IsAddTimeChunk { get; set; }
         /// <summary>
-        /// Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>
-        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>.
+        /// Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPngOptions, ExecuteOptions)"/>
+        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPngOptions, ExecuteOptions)"/>.
         /// </summary>
         public bool IsCopyAndShrinkZip { get; set; }
         /// <summary>
@@ -94,8 +94,8 @@ namespace RecompressPng
         /// <param name="idatSize">Size of each data part of IDAT chunk.</param>
         /// <param name="textCreationTimeFormat">Format string of <see cref="DateTime"/> for value of Creation Time of tEXt chunk.</param>
         /// <param name="isAddTimeChunk">Whether add tIME chunk or not.</param>
-        /// <param name="isCopyAndShrinkZip">Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>
-        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPNGOptions, ExecuteOptions)"/>.</param>
+        /// <param name="isCopyAndShrinkZip">Whether use <see cref="Program.RecompressPngInZipArchiveCopyAndShrink(string, string, ZopfliSharp.ZopfliPngOptions, ExecuteOptions)"/>
+        /// or <see cref="Program.RecompressPngInZipArchive(string, string, ZopfliSharp.ZopfliPngOptions, ExecuteOptions)"/>.</param>
         /// <param name="isDryRun">Don't save any files, just see the console output.</param>
         /// <param name="isCountOnly">Count target PNG files and exit this program.</param>
         /// <param name="verbose">Allow to output to stdout from zopflipng.dll.</param>
