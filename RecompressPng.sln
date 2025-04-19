@@ -13,7 +13,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Koturn.Zopfli", "Koturn.Zop
 		{CC414E6F-D22E-478D-8DD1-D25FB819B90B} = {CC414E6F-D22E-478D-8DD1-D25FB819B90B}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArgumentParserSharp", "ArgumentParserSharp\ArgumentParserSharp\ArgumentParserSharp.csproj", "{9CD7F8C5-E069-4480-A23F-E932B54AB25D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Koturn.CommandLine", "Koturn.CommandLine\Koturn.CommandLine\Koturn.CommandLine.csproj", "{9CD7F8C5-E069-4480-A23F-E932B54AB25D}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libzopfli", "Koturn.Zopfli\libzopfli\libzopfli.vcxproj", "{084ED0ED-6B55-4734-B77E-42D7C24B6348}"
 EndProject
