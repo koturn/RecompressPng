@@ -18,7 +18,6 @@ using System.Runtime.Intrinsics.X86;
 #endif  // NETCOREAPP3_0_OR_GREATER
 using System.Security;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -28,6 +27,7 @@ using Koturn.Zopfli;
 using Koturn.Zopfli.Checksums;
 using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
+using RecompressPng.Internals;
 #if !NET6_0_OR_GREATER
 using RecompressPng.Internals;
 #endif  // !NET6_0_OR_GREATER
@@ -1791,7 +1791,7 @@ namespace RecompressPng
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static string MinifyJson(string json)
         {
-            return Regex.Replace(json, "(\"(?:[^\"\\\\]|\\\\.)*\")|\\s+", "$1");
+            return RegexHelper.MinifyJsonPatternRegex.Replace(json, "$1");
         }
 
         /// <summary>
