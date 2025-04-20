@@ -44,7 +44,7 @@ namespace RecompressPng
         /// <summary>
         /// Native method handle of memory comparison function.
         /// </summary>
-        private NativeMethodHandle<CompareMemoryDelegate> _compareMemoryMethodHandle;
+        private NativeMethodHandle<CompareMemoryDelegate>? _compareMemoryMethodHandle;
         /// <summary>
         /// Delegate of memory comparison method.
         /// </summary>
@@ -406,7 +406,7 @@ namespace RecompressPng
         /// <para>If CPUID is not supported or SSE2 is not available, return null.</para>
         /// </summary>
         /// <returns>Created native method handle.</returns>
-        private static NativeMethodHandle<CompareMemoryDelegate> CreateAppropreateCompareMemoryMethodHandle()
+        private static NativeMethodHandle<CompareMemoryDelegate>? CreateAppropreateCompareMemoryMethodHandle()
         {
             if (!Intrinsic.IsCpuIdSupported())
             {
@@ -435,8 +435,8 @@ namespace RecompressPng
         /// <returns>Created native method handle.</returns>
         private static NativeMethodHandle<CompareMemoryDelegate> CreateCompareMemorySse2MethodHandle()
         {
-            return NativeMethodHandle.Create<CompareMemoryDelegate>(Environment.Is64BitProcess ? new byte[]
-                {
+            return NativeMethodHandle.Create<CompareMemoryDelegate>(Environment.Is64BitProcess ?
+                [
                     0x4d, 0x89, 0xc1,              // mov    r9,r8
                     0x49, 0x83, 0xe1, 0xf0,        // and    r9,0xfffffffffffffff0
                     0x74, 0x2f,                    // je     L4
@@ -475,8 +475,8 @@ namespace RecompressPng
                     0x74, 0xec,                    // je     L6
                     0x31, 0xc0,                    // xor    eax,eax
                     0xeb, 0xd9                     // jmp    L3
-                } : new byte[]
-                {
+                ] :
+                [
                     0x55,                          // push   ebp
                     0x89, 0xe5,                    // mov    ebp,esp
                     0x57,                          // push   edi
@@ -528,7 +528,7 @@ namespace RecompressPng
                     0x38, 0x14, 0x01,              // cmp    BYTE PTR [ecx+eax*1],dl
                     0x74, 0xf0,                    // je     L6
                     0xeb, 0xd7                     // jmp    L3
-                });
+                ]);
         }
 
 
@@ -538,8 +538,8 @@ namespace RecompressPng
         /// <returns>Created native method handle.</returns>
         private static NativeMethodHandle<CompareMemoryDelegate> CreateCompareMemoryAvx2MethodHandle()
         {
-            return NativeMethodHandle.Create<CompareMemoryDelegate>(Environment.Is64BitProcess ? new byte[]
-                {
+            return NativeMethodHandle.Create<CompareMemoryDelegate>(Environment.Is64BitProcess ?
+                [
                     0x4d, 0x89, 0xc1,                          // mov    r9,r8
                     0x49, 0x83, 0xe1, 0xe0,                    // and    r9,0xffffffffffffffe0
                     0x74, 0x43,                                // je     L4
@@ -584,8 +584,8 @@ namespace RecompressPng
                     0x74, 0xec,                                // je     L6
                     0x31, 0xc0,                                // xor    eax,eax
                     0xc3                                       // ret
-                } : new byte[]
-                {
+                ] :
+                [
                     0x55,                                      // push   ebp
                     0x89, 0xe5,                                // mov    ebp,esp
                     0x57,                                      // push   edi
@@ -648,7 +648,7 @@ namespace RecompressPng
                     0x5f,                                      // pop    edi
                     0x5d,                                      // pop    ebp
                     0xc3                                       // ret
-                });
+                ]);
         }
 #endif  // NET_SIMD
 

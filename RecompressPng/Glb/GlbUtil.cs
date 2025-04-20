@@ -61,19 +61,11 @@ namespace RecompressPng.Glb
                 throw new InvalidDataException($"Second GLB chunk type is not Binary. expected = 0x{(uint)GlbChunkType.Binary:X8}; actual = 0x{glbChunks[1].ChunkType:X8}");
             }
 
-            var data0 = glbChunks[0].Data;
-            if (data0 == null)
-            {
-                throw new ArgumentNullException(nameof(data0), "First GLB chunk data is null.");
-            }
+            var data0 = glbChunks[0].Data ?? throw new InvalidDataException("First GLB chunk data is null.");
             var gltfJson = LoadJson(data0);
             var bufferViews = (JsonArray)gltfJson["bufferViews"];
 
-            var data1 = glbChunks[1].Data;
-            if (data1 == null)
-            {
-                throw new ArgumentNullException(nameof(data1), "Second GLB chunk data is null.");
-            }
+            var data1 = glbChunks[1].Data ?? throw new InvalidDataException("Second GLB chunk data is null.");
             var binaryBuffers = SplitBuffer(data1, bufferViews);
 
             var images = (JsonArray)gltfJson["images"];

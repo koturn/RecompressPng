@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFrameworks>net9.0-windows;net481</TargetFrameworks>
     <LangVersion>13</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -29,7 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Koturn.CommandLine\Koturn.CommandLine\Koturn.CommandLine.csproj" />
-    <ProjectReference Include="..\Koturn.NativeCode\Koturn.NativeCode\Koturn.NativeCode.csproj" />
+    <ProjectReference Include="..\Koturn.NativeCode\Koturn.NativeCode\Koturn.NativeCode.csproj" Condition="'$(TargetFramework)'=='net481'" />
     <ProjectReference Include="..\Koturn.Zopfli\Koturn.Zopfli\Koturn.Zopfli.csproj" />
   </ItemGroup>
 

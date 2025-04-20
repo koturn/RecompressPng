@@ -13,13 +13,14 @@ using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NETCOREAPP3_0_OR_GREATER
 using System.Runtime.Intrinsics.X86;
+#endif  // NETCOREAPP3_0_OR_GREATER
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using NLog;
 using Koturn.CommandLine;
 using Koturn.CommandLine.Exceptions;
@@ -27,6 +28,9 @@ using Koturn.Zopfli;
 using Koturn.Zopfli.Checksums;
 using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
+#if !NET6_0_OR_GREATER
+using RecompressPng.Internals;
+#endif  // !NET6_0_OR_GREATER
 
 
 namespace RecompressPng
@@ -93,10 +97,12 @@ namespace RecompressPng
             //   2. dllDir + @"\avx2"
             //   3. dllDir
             UnsafeNativeMethods.AddDllDirectory(dllDir);
+#if NETCOREAPP3_0_OR_GREATER
             if (Avx2.IsSupported)
             {
                 UnsafeNativeMethods.AddDllDirectory(Path.Combine(dllDir, "avx2"));
             }
+#endif  // NETCOREAPP3_0_OR_GREATER
             UnsafeNativeMethods.SetDefaultDllDirectories(LoadLibrarySearchFlags.DefaultDirs);
         }
 
@@ -254,7 +260,11 @@ namespace RecompressPng
             ap.Add("keep-all-chunks",
                 "Keep all metadata chunks.\n"
                 + indent2 + "This option is equivalent to the following.\n"
+#if NETCOREAPP2_0_OR_GREATER
                 + indent3 + $"--keep-chunks={string.Join(',', AllChunks)}");
+#else
+                + indent3 + $"--keep-chunks={string.Join(",", AllChunks)}");
+#endif  // NETCOREAPP2_0_OR_GREATER
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("zip-copy-and-shrink",
@@ -966,7 +976,11 @@ namespace RecompressPng
                 var jsonByteCount = Encoding.UTF8.GetByteCount(jsonString);
                 var jsonAlignedByteCount = RoundUpToMultiplyOf4(jsonByteCount);
                 var data = new byte[jsonAlignedByteCount];
+#if NETCOREAPP2_1_OR_GREATER
                 Encoding.UTF8.GetBytes(jsonString, data);
+#else
+                Encoding.UTF8.GetBytes(jsonString, 0, jsonString.Length, data, 0);
+#endif  // NETCOREAPP2_1_OR_GREATER
                 for (int i = jsonByteCount; i < jsonAlignedByteCount; i++)
                 {
                     data[i] = (byte)' ';
@@ -989,7 +1003,11 @@ namespace RecompressPng
                     // Write second chunk.
                     glbChunks[1].WriteTo(stream);
 
+#if NETCOREAPP2_1_OR_GREATER
                     ReadOnlySpan<byte> padding = stackalloc byte[4];
+#else
+                    var padding = new byte[4];
+#endif  // NETCOREAPP2_1_OR_GREATER
                     nOffset = 0;
                     foreach (var buf in binaryBuffers)
                     {
@@ -999,7 +1017,11 @@ namespace RecompressPng
                         var diff = alignedOffset - nOffset;
                         if (diff > 0)
                         {
+#if NETCOREAPP2_1_OR_GREATER
                             stream.Write(padding.Slice(0, diff));
+#else
+                            stream.Write(padding, 0, diff);
+#endif  // NETCOREAPP2_1_OR_GREATER
                         }
                         nOffset = alignedOffset;
                     }
@@ -1087,7 +1109,7 @@ namespace RecompressPng
                 {
                     var sw = Stopwatch.StartNew();
                     var procIndex = Interlocked.Increment(ref nProcPngFiles);
-                    var srcRelPath = ToRelativePath(srcFilePath, srcBaseDirFullPath);
+                    var srcRelPath = GetRelativePath(srcBaseDirFullPath, srcFilePath);
                     var dstFilePath = execOptions.IsOverwrite ? srcFilePath : Path.Combine(
                         dstBaseDirFullPath,
                         new StringBuilder(Path.GetFullPath(srcFilePath))
@@ -1137,7 +1159,12 @@ namespace RecompressPng
                             if (isReplace || execOptions.IsModifyPng)
                             {
                                 using var fs = new FileStream(dstFilePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+#if NETCOREAPP2_1_OR_GREATER
                                 fs.Write(pngDataSpan);
+#else
+                                var spanData = pngDataSpan.ToArray();
+                                fs.Write(spanData, 0, spanData.Length);
+#endif  // NETCOREAPP2_1_OR_GREATER
                             }
                             else if (srcFilePath != dstFilePath)
                             {
@@ -1295,7 +1322,7 @@ namespace RecompressPng
             foreach (var filePath in Directory.EnumerateFiles(dirFullPath, "*.png", SearchOption.AllDirectories))
             {
                 var fileSize = new FileInfo(filePath).Length;
-                Console.WriteLine($"{ToRelativePath(filePath, dirFullPath)}: {ToMiB(fileSize):F3} MiB");
+                Console.WriteLine($"{GetRelativePath(dirFullPath, filePath)}: {ToMiB(fileSize):F3} MiB");
                 totalPngFiles++;
                 totalPngFileSize += fileSize;
             }
@@ -1312,10 +1339,18 @@ namespace RecompressPng
         /// <returns>True if specified file is a zip archive file, otherwise false.</returns>
         private static bool IsZipFile(string zipFilePath)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> buffer = stackalloc byte[4];
+#else
+            var buffer = new byte[4];
+#endif  // NETCOREAPP2_1_OR_GREATER
             using (var fs = File.OpenRead(zipFilePath))
             {
+#if NETCOREAPP2_1_OR_GREATER
                 if (fs.Read(buffer) < buffer.Length)
+#else
+                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
                 {
                     return false;
                 }
@@ -1380,10 +1415,19 @@ namespace RecompressPng
         /// <returns>True if specified file is a glTF file, otherwise false.</returns>
         private static bool IsGltfFile(string gltfFilePath)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> buffer = stackalloc byte[GltfMagicBytes.Length];
+#else
+            var buffer = new byte[GltfMagicBytes.Length];
+#endif  // NETCOREAPP2_1_OR_GREATER
+
             using (var fs = File.OpenRead(gltfFilePath))
             {
+#if NETCOREAPP2_1_OR_GREATER
                 if (fs.Read(buffer) < buffer.Length)
+#else
+                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
                 {
                     return false;
                 }
@@ -1439,10 +1483,15 @@ namespace RecompressPng
         /// <returns>The number of IDAT chunks in specified PNG stream.</returns>
         static (int Count, long TotalIdatSize) CountIdatChunk(Stream pngStream)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
             if (pngStream.Read(pngSignature) < pngSignature.Length)
+#else
+            var pngSignature = new byte[PngSignature.Length];
+            if (pngStream.Read(pngSignature, 0, pngSignature.Length) < pngSignature.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
             {
-                throw new Exception("Source PNG file data is too small.");
+                throw new EndOfStreamException("Source PNG file data is too small.");
             }
 
             if (!HasPngSignature(pngSignature))
@@ -1515,10 +1564,15 @@ namespace RecompressPng
         /// <param name="createTime">Ceation time used for "Creation Time" of tEXt chunk and value of tIME chunk.</param>
         private static void AddAdditionalChunks(Stream srcPngStream, Stream dstPngStream, ExecuteOptions execOptions, DateTime? createTime)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> pngSignature = stackalloc byte[PngSignature.Length];
             if (srcPngStream.Read(pngSignature) < pngSignature.Length)
+#else
+            var pngSignature = new byte[PngSignature.Length];
+            if (srcPngStream.Read(pngSignature, 0, pngSignature.Length) < pngSignature.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
             {
-                throw new Exception("Source PNG file data is too small.");
+                throw new EndOfStreamException("Source PNG file data is too small.");
             }
 
             if (!HasPngSignature(pngSignature))
@@ -1553,7 +1607,7 @@ namespace RecompressPng
 
                     var idatData = new byte[Math.Min(execOptions.IdatSize, idatMs.Length)];
                     var chunkTypeDataIdat = Encoding.ASCII.GetBytes(ChunkTypeIdat);
-                    for (var nRead = idatMs.Read(idatData); nRead != 0; nRead = idatMs.Read(idatData))
+                    for (var nRead = idatMs.Read(idatData, 0, idatData.Length); nRead != 0; nRead = idatMs.Read(idatData, 0, idatData.Length))
                     {
                         bw.Write(BinaryPrimitives.ReverseEndianness(nRead));
                         bw.Write(chunkTypeDataIdat);
@@ -1602,14 +1656,44 @@ namespace RecompressPng
         /// <summary>
         /// Convert path to relative path.
         /// </summary>
-        /// <param name="targetPath">Target path.</param>
-        /// <param name="basePath">Base path.</param>
-        /// <returns>Relative path of <paramref name="targetPath"/>.</returns>
-        private static string ToRelativePath(string targetPath, string basePath)
+        /// <param name="relativeTo">The source path the output should be relative to. This path is always considered to be a directory.</param>
+        /// <param name="path">The destination path.</param>
+        /// <returns>The relative path or <paramref name="path"/> if the paths don't share the same root.</returns>
+        private static string GetRelativePath(string relativeTo, string path)
         {
-            return HttpUtility.UrlDecode(new Uri(Path.GetFullPath(basePath))
-                .MakeRelativeUri(new Uri(Path.GetFullPath(targetPath))).ToString())
-                .Replace('/', '\\');
+#if NETCOREAPP2_0_OR_GREATER
+            return Path.GetRelativePath(relativeTo, path);
+#else
+            var fullPath = Path.GetFullPath(path).Replace('/', '\\').TrimEnd('\\');
+            var fullRelativeTo = Path.GetFullPath(relativeTo).Replace('/', '\\').TrimEnd('\\');
+
+            var pathParts = fullPath.Split('\\');
+            var relToParts = fullRelativeTo.Split('\\');
+
+            int commonPrefixCount = 0;
+            for (int i = 0; i < Math.Min(pathParts.Length, relToParts.Length); i++)
+            {
+                if (!string.Equals(pathParts[i], relToParts[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+                commonPrefixCount++;
+            }
+
+            var relativePathParts = new List<string>(Math.Max(0, relToParts.Length - commonPrefixCount) + Math.Max(0, pathParts.Length - commonPrefixCount));
+            for (int i = commonPrefixCount; i < relToParts.Length; i++)
+            {
+                relativePathParts.Add("..");
+            }
+            for (int i = commonPrefixCount; i < pathParts.Length; i++)
+            {
+                relativePathParts.Add(pathParts[i]);
+            }
+
+            var relativePath = string.Join("\\", relativePathParts);
+
+            return relativePath.Length == 0 ? "." : relativePath;
+#endif  // NETCOREAPP2_0_OR_GREATER
         }
 
         /// <summary>
@@ -1658,14 +1742,19 @@ namespace RecompressPng
         /// <param name="timestamp">Timestamp for new entry.</param>
         private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, ReadOnlySpan<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
         {
+#if NET6_0_OR_GREATER
+            ArgumentNullException.ThrowIfNull(lockObj);
+            ArgumentNullException.ThrowIfNull(archive);
+#else
             if (lockObj == null)
             {
-                throw new ArgumentNullException(nameof(lockObj));
+                ThrowHelper.ThrowArgumentNullException(nameof(lockObj));
             }
             if (archive == null)
             {
-                throw new ArgumentNullException(nameof(archive));
+                ThrowHelper.ThrowArgumentNullException(nameof(archive));
             }
+#endif  // NET6_0_OR_GREATER
             lock (lockObj)
             {
                 var dstEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
@@ -1674,7 +1763,12 @@ namespace RecompressPng
                     dstEntry.LastWriteTime = timestamp.Value;
                 }
                 using var dstZs = dstEntry.Open();
+#if NETCOREAPP2_1_OR_GREATER
                 dstZs.Write(data);
+#else
+                var dataArray = data.ToArray();
+                dstZs.Write(dataArray, 0, dataArray.Length);
+#endif  // NETCOREAPP2_1_OR_GREATER
             }
         }
 

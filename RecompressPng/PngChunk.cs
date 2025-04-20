@@ -77,9 +77,14 @@ namespace RecompressPng
             WriteAsBigEndian(s, data.Length);
 
             // Chunk Type
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> buf = stackalloc byte[4];
             Encoding.ASCII.GetBytes(Type, buf);
             s.Write(buf);
+#else
+            var buf = Encoding.ASCII.GetBytes(Type);
+            s.Write(buf, 0, buf.Length);
+#endif  // NETCOREAPP2_1_OR_GREATER
 
             // Data
             s.Write(data, 0, data.Length);
@@ -96,15 +101,27 @@ namespace RecompressPng
         /// <returns>New instance of <see cref="PngChunk"/>.</returns>
         public static PngChunk ReadOneChunk(Stream s, bool verifyCrc32 = false)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> buf = stackalloc byte[4];
+#else
+            var buf = new byte[4];
+#endif  // NETCOREAPP2_1_OR_GREATER
 
+#if NETCOREAPP2_1_OR_GREATER
             if (s.Read(buf) < buf.Length)
+#else
+            if (s.Read(buf, 0, buf.Length) < buf.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
             {
                 throw new InvalidDataException("Failed to read data length.");
             }
             var length = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
 
+#if NETCOREAPP2_1_OR_GREATER
             if (s.Read(buf) < buf.Length)
+#else
+            if (s.Read(buf, 0, buf.Length) < buf.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
             {
                 throw new InvalidDataException("Failed to read chunk type.");
             }
@@ -116,8 +133,13 @@ namespace RecompressPng
                 throw new InvalidDataException($"Failed to data type at {type} chunk");
             }
 
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> crc32Buf = stackalloc byte[4];
             if (s.Read(crc32Buf) < crc32Buf.Length)
+#else
+            var crc32Buf = new byte[4];
+            if (s.Read(crc32Buf, 0, crc32Buf.Length) < crc32Buf.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
             {
                 throw new InvalidDataException($"Failed to read CRC-32 at {type} chunk.");
             }
@@ -167,6 +189,7 @@ namespace RecompressPng
         public static void WriteTimeChunk(Stream s, in DateTime dt)
         {
             var dtUtc = dt.ToUniversalTime();
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> dtData = [
                 (byte)((dtUtc.Year & 0xff00) >> 8),
                 (byte)(dtUtc.Year & 0xff),
@@ -174,15 +197,30 @@ namespace RecompressPng
                 (byte)dtUtc.Day,
                 (byte)dtUtc.Hour,
                 (byte)dtUtc.Minute,
-                (byte)dtUtc.Second,
+                (byte)dtUtc.Second
             ];
-
+#else
+            var dtData = new byte[]
+            {
+                (byte)((dtUtc.Year & 0xff00) >> 8),
+                (byte)(dtUtc.Year & 0xff),
+                (byte)dtUtc.Month,
+                (byte)dtUtc.Day,
+                (byte)dtUtc.Hour,
+                (byte)dtUtc.Minute,
+                (byte)dtUtc.Second
+            };
+#endif  // NETCOREAPP2_1_OR_GREATER
             WriteAsBigEndian(s, dtData.Length);
 
             var textChunkTypeData = Encoding.ASCII.GetBytes("tIME");
 
             s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
+#if NETCOREAPP2_1_OR_GREATER
             s.Write(dtData);
+#else
+            s.Write(dtData, 0, dtData.Length);
+#endif  // NETCOREAPP2_1_OR_GREATER
 
             var crc = Crc32Util.Update(textChunkTypeData);
             crc = Crc32Util.Update(dtData, crc);
@@ -206,6 +244,7 @@ namespace RecompressPng
         /// <param name="data"><see cref="uint"/> data.</param>
         private static void WriteAsBigEndian(Stream s, uint data)
         {
+#if NETCOREAPP2_1_OR_GREATER
             Span<byte> buf =
             [
                 (byte)(data >> 24),
@@ -214,6 +253,16 @@ namespace RecompressPng
                 (byte)data
             ];
             s.Write(buf);
+#else
+            var buf = new byte[]
+            {
+                (byte)(data >> 24),
+                (byte)(data >> 16),
+                (byte)(data >> 8),
+                (byte)data
+            };
+            s.Write(buf, 0, buf.Length);
+#endif  // NETCOREAPP2_1_OR_GREATER
         }
 
         /// <summary>
