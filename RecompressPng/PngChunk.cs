@@ -12,6 +12,15 @@ namespace RecompressPng
     public class PngChunk
     {
         /// <summary>
+        /// Byte sequence of "tEXt" in ASCII.
+        /// </summary>
+        private static readonly byte[] TextChunkTypeBytes = [(byte)'t', (byte)'E', (byte)'X', (byte)'t'];
+        /// <summary>
+        /// Byte sequence of "tIME" in ASCII.
+        /// </summary>
+        private static readonly byte[] TimeChunkTypeBytes = [(byte)'t', (byte)'I', (byte)'M', (byte)'E'];
+
+        /// <summary>
         /// Chunk type string.
         /// </summary>
         public string Type { get; }
@@ -166,14 +175,13 @@ namespace RecompressPng
 
             WriteAsBigEndian(s, keyData.Length + 1 + valueData.Length);
 
-            var textChunkTypeData = Encoding.ASCII.GetBytes("tEXt");
-            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
+            s.Write(TextChunkTypeBytes, 0, TextChunkTypeBytes.Length);
 
             s.Write(keyData, 0, keyData.Length);
             s.WriteByte((byte)0);
             s.Write(valueData, 0, valueData.Length);
 
-            var crc = Crc32Util.Update(textChunkTypeData);
+            var crc = Crc32Util.Update(TextChunkTypeBytes);
             crc = Crc32Util.Update(keyData, crc);
             crc = Crc32Util.Update((byte)0, crc);
             crc = Crc32Util.Update(valueData, crc);
@@ -213,16 +221,14 @@ namespace RecompressPng
 #endif  // NETCOREAPP2_1_OR_GREATER
             WriteAsBigEndian(s, dtData.Length);
 
-            var textChunkTypeData = Encoding.ASCII.GetBytes("tIME");
-
-            s.Write(textChunkTypeData, 0, textChunkTypeData.Length);
+            s.Write(TimeChunkTypeBytes, 0, TimeChunkTypeBytes.Length);
 #if NETCOREAPP2_1_OR_GREATER
             s.Write(dtData);
 #else
             s.Write(dtData, 0, dtData.Length);
 #endif  // NETCOREAPP2_1_OR_GREATER
 
-            var crc = Crc32Util.Update(textChunkTypeData);
+            var crc = Crc32Util.Update(TimeChunkTypeBytes);
             crc = Crc32Util.Update(dtData, crc);
             WriteAsBigEndian(s, Crc32Util.Finalize(crc));
         }
