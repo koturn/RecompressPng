@@ -3,7 +3,7 @@ image: Visual Studio 2022
 environment:
   SOLUTION_NAME: RecompressPng
   ARTIFACTS_BASEDIR: Artifacts
-  ARTIFACTS_NAME_NET9: $(SOLUTION_NAME)-net9.0-windows
+  ARTIFACTS_NAME_NET9: $(SOLUTION_NAME)-net9.0
   ARTIFACTS_NAME_NFW481: $(SOLUTION_NAME)-net481
 init:
 - cmd: '"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"'
@@ -20,7 +20,7 @@ build_script:
 
     nmake deploy-net481
 test_script:
-- cmd: %ARTIFACTS_BASEDIR%\%ARTIFACTS_NAME_NET9%\%SOLUTION_NAME%.exe -h
+- cmd: '%ARTIFACTS_BASEDIR%\%ARTIFACTS_NAME_NET9%\%SOLUTION_NAME%.exe -h'
 artifacts:
 - path: $(ARTIFACTS_NAME_NET9).zip
   name: .NET 9 binary of $(SOLUTION_NAME)
