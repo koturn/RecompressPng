@@ -29,6 +29,10 @@ using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
 using RecompressPng.Internals;
 
+#if !NET9_0_OR_GREATER
+using Lock = object;
+#endif  // NET9_0_OR_GREATER
+
 
 namespace RecompressPng
 {
@@ -441,12 +445,13 @@ namespace RecompressPng
             using (var srcArchive = ZipFile.OpenRead(srcZipFilePath))
             using (var dstArchive = execOptions.IsDryRun ? null : ZipFile.Open(dstZipFilePath, ZipArchiveMode.Create))
             {
-                var srcLock = new object();
-                var dstLock = execOptions.IsDryRun ? null : new object();
+                var srcLock = new Lock();
+                var dstLock = execOptions.IsDryRun ? null : new Lock();
 
                 void CopyZipEntry(ZipArchiveEntry srcEntry)
                 {
-                    if (execOptions.IsDryRun)
+                    // is dry-run.
+                    if (dstArchive is null || dstLock is null)
                     {
                         return;
                     }
@@ -520,7 +525,8 @@ namespace RecompressPng
                                 pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
                             }
 
-                            if (!execOptions.IsDryRun)
+                            // is not dry-run.
+                            if (dstArchive is not null && dstLock is not null)
                             {
                                 CreateEntryAndWriteData(
                                     dstArchive,
@@ -651,7 +657,7 @@ namespace RecompressPng
 
             using (var zipArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
             {
-                var lockObj = new object();
+                var lockObj = new Lock();
                 var deleteEntryList = new List<ZipArchiveEntry>();
 
                 Parallel.ForEach(
@@ -1699,7 +1705,7 @@ namespace RecompressPng
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <returns>Read data.</returns>
-        private static byte[] ReadAllBytes(ZipArchiveEntry entry, object lockObj)
+        private static byte[] ReadAllBytes(ZipArchiveEntry entry, Lock lockObj)
         {
             using var ms = new MemoryStream((int)entry.Length);
             lock (lockObj)
@@ -1718,7 +1724,7 @@ namespace RecompressPng
         /// <param name="entry">Target <see cref="ZipArchiveEntry"/>.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <returns>Read data.</returns>
-        private static (byte[] Data, int Length) ReadAllBytesRestrict(ZipArchiveEntry entry, object lockObj)
+        private static (byte[] Data, int Length) ReadAllBytesRestrict(ZipArchiveEntry entry, Lock lockObj)
         {
             using var ms = new MemoryStream(4 * 1024 * 1024);
             lock (lockObj)
@@ -1737,21 +1743,8 @@ namespace RecompressPng
         /// <param name="data">The data to write.</param>
         /// <param name="lockObj">The object for lock.</param>
         /// <param name="timestamp">Timestamp for new entry.</param>
-        private static void CreateEntryAndWriteData(ZipArchive? archive, string entryName, ReadOnlySpan<byte> data, object? lockObj, DateTimeOffset? timestamp = null)
+        private static void CreateEntryAndWriteData(ZipArchive archive, string entryName, ReadOnlySpan<byte> data, Lock lockObj, DateTimeOffset? timestamp = null)
         {
-#if NET6_0_OR_GREATER
-            ArgumentNullException.ThrowIfNull(lockObj);
-            ArgumentNullException.ThrowIfNull(archive);
-#else
-            if (lockObj == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(lockObj));
-            }
-            if (archive == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(archive));
-            }
-#endif  // NET6_0_OR_GREATER
             lock (lockObj)
             {
                 var dstEntry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
