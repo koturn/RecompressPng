@@ -30,7 +30,7 @@ namespace RecompressPng
         /// </summary>
         /// <param name="index">A variable where <see cref="Index"/> is stored.</param>
         /// <param name="imageName">A variable where <see cref="ImageName"/> is stored.</param>
-        public void Deconstruct(out int index, out string imageName)
+        public readonly void Deconstruct(out int index, out string imageName)
         {
             index = Index;
             imageName = ImageName;

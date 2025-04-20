@@ -44,7 +44,7 @@ namespace RecompressPng
         /// Return message of result.
         /// </summary>
         /// <returns>Message of result</returns>
-        public override string ToString()
+        public override readonly string ToString()
         {
             var message = GetMassage(Type);
             return string.IsNullOrEmpty(OptionalMessage) ? message : (message + $" ({OptionalMessage})");
