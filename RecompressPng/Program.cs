@@ -1518,7 +1518,8 @@ namespace RecompressPng
                     cnt++;
                     totalIdatSize += pngChunk.Data.LongLength;
                 }
-            } while (pngChunk.Type != ChunkTypeIend);
+            }
+            while (pngChunk.Type != ChunkTypeIend);
 
             return (cnt, totalIdatSize);
         }
@@ -1605,7 +1606,8 @@ namespace RecompressPng
                     {
                         idatMs.Write(pngChunk.Data, 0, pngChunk.Data.Length);
                         pngChunk = PngChunk.ReadOneChunk(srcPngStream);
-                    } while (pngChunk.Type == ChunkTypeIdat);
+                    }
+                    while (pngChunk.Type == ChunkTypeIdat);
                     idatMs.Position = 0;
 
                     var idatData = new byte[Math.Min(execOptions.IdatSize, idatMs.Length)];
@@ -1623,7 +1625,8 @@ namespace RecompressPng
                     }
                 }
 
-                if (pngChunk.Type == ChunkNameText) {
+                if (pngChunk.Type == ChunkNameText)
+                {
                     // May be thrown ArgumentOutOfRangeException if null character is not found.
                     var key = Encoding.ASCII.GetString(
                         pngChunk.Data,
@@ -1633,9 +1636,13 @@ namespace RecompressPng
                     {
                         hasTextCreationTime = true;
                     }
-                } else if (pngChunk.Type == ChunkNameTime) {
+                }
+                else if (pngChunk.Type == ChunkNameTime)
+                {
                     hasTimeChunk = true;
-                } else if (pngChunk.Type == ChunkTypeIend) {
+                }
+                else if (pngChunk.Type == ChunkTypeIend)
+                {
                     // Insert tEXt and tIME chunks before IEND.
                     if (createTime.HasValue)
                     {
@@ -1653,7 +1660,8 @@ namespace RecompressPng
                     }
                 }
                 pngChunk.WriteTo(dstPngStream);
-            } while (pngChunk.Type != ChunkTypeIend);
+            }
+            while (pngChunk.Type != ChunkTypeIend);
         }
 
         /// <summary>
