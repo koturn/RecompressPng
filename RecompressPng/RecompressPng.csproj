@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WarningLevel>8</WarningLevel>
     <Title>RecompressPng</Title>
-    <Version>1.6.2.0</Version>
+    <Version>1.7.0</Version>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
