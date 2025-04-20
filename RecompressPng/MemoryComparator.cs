@@ -2,7 +2,6 @@
 #    define NET_SIMD
 #endif  // NETCOREAPP3_0_OR_GREATER
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -12,6 +11,7 @@ using System.Runtime.Intrinsics.X86;
 #else
 using Koturn.NativeCode;
 using Koturn.NativeCode.Intrinsics;
+using RecompressPng.Internals;
 #endif  // NET_SIMD
 
 
@@ -200,7 +200,7 @@ namespace RecompressPng
 #else
             if (_compareMemory == null)
             {
-                ThrowArgumentNullException(nameof(_compareMemory), "This instance was already disposed.");
+                ThrowHelper.ThrowObjectDisposedException(nameof(MemoryComparator), "This instance was already disposed.");
                 return false;
             }
             return _compareMemory(pData1, pData2, (UIntPtr)dataLength);
@@ -651,20 +651,5 @@ namespace RecompressPng
                 ]);
         }
 #endif  // NET_SIMD
-
-
-#if !NET_SIMD
-        /// <summary>
-        /// Throw <see cref="ArgumentNullException"/>.
-        /// </summary>
-        /// <param name="paramName">The name of the parameter that caused the exception.</param>
-        /// <param name="message">A message that describes the error.</param>
-        /// <exception cref="ArgumentNullException">Always thrown.</exception>
-        [DoesNotReturn]
-        private static void ThrowArgumentNullException(string paramName, string message)
-        {
-            throw new ArgumentNullException(paramName, message);
-        }
-#endif  // !NET_SIMD
     }
 }

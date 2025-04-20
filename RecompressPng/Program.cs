@@ -28,9 +28,6 @@ using Koturn.Zopfli.Checksums;
 using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
 using RecompressPng.Internals;
-#if !NET6_0_OR_GREATER
-using RecompressPng.Internals;
-#endif  // !NET6_0_OR_GREATER
 
 
 namespace RecompressPng
