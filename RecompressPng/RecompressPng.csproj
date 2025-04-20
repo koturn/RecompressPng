@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WarningLevel>8</WarningLevel>
+    <Title>RecompressPng</Title>
+    <Version>1.6.2.0</Version>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
@@ -15,7 +17,8 @@
     <PackageProjectUrl>https://github.com/koturn/RecompressPng</PackageProjectUrl>
     <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>1.6.2.0</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Windows;zopfli;zopflipng</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +37,10 @@
     <None Include="..\LICENSE">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 
