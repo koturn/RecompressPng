@@ -92,9 +92,9 @@ namespace RecompressPng
             UnsafeNativeMethods.SetDefaultDllDirectories(LoadLibrarySearchFlags.DefaultDirs);
 
             _logger = LogManager.GetCurrentClassLogger();
-            PngSignature = new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a };
-            GltfMagicBytes = new byte[] { (byte)'g', (byte)'l', (byte)'T', (byte)'F' };
-            AllChunks = new string[] { "acTL", "bKGD", "cHRM", "eXIf", "fcTL", "fdAT", "gAMA", "hIST", "iCCP", "iTXt", "pHYs", "sBIT", "sPLT", "sRGB", "tEXt", "tIME", "zTXt" };
+            PngSignature = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0d, 0x0a, 0x1a, 0x0a];
+            GltfMagicBytes = [(byte)'g', (byte)'l', (byte)'T', (byte)'F'];
+            AllChunks = ["acTL", "bKGD", "cHRM", "eXIf", "fcTL", "fdAT", "gAMA", "hIST", "iCCP", "iTXt", "pHYs", "sBIT", "sPLT", "sRGB", "tEXt", "tIME", "zTXt"];
         }
 
         /// <summary>

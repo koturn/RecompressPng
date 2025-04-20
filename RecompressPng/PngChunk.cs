@@ -167,7 +167,7 @@ namespace RecompressPng
         public static void WriteTimeChunk(Stream s, in DateTime dt)
         {
             var dtUtc = dt.ToUniversalTime();
-            Span<byte> dtData = stackalloc byte[] {
+            Span<byte> dtData = [
                 (byte)((dtUtc.Year & 0xff00) >> 8),
                 (byte)(dtUtc.Year & 0xff),
                 (byte)dtUtc.Month,
@@ -175,7 +175,7 @@ namespace RecompressPng
                 (byte)dtUtc.Hour,
                 (byte)dtUtc.Minute,
                 (byte)dtUtc.Second,
-            };
+            ];
 
             WriteAsBigEndian(s, dtData.Length);
 
@@ -206,13 +206,13 @@ namespace RecompressPng
         /// <param name="data"><see cref="uint"/> data.</param>
         private static void WriteAsBigEndian(Stream s, uint data)
         {
-            Span<byte> buf = stackalloc byte[]
-            {
+            Span<byte> buf =
+            [
                 (byte)(data >> 24),
                 (byte)(data >> 16),
                 (byte)(data >> 8),
                 (byte)data
-            };
+            ];
             s.Write(buf);
         }
 
