@@ -1,4 +1,4 @@
-﻿namespace RecompressPng.Glb
+namespace RecompressPng.Glb
 {
     /// <summary>
     /// Glb chunk type values.

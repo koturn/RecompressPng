@@ -1,4 +1,4 @@
-﻿namespace RecompressPng
+namespace RecompressPng
 {
     /// <summary>
     /// Pair of image index and image name.
