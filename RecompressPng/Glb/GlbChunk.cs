@@ -7,33 +7,26 @@ namespace RecompressPng.Glb
     /// <summary>
     /// Chunk of GLB.
     /// </summary>
-    public class GlbChunk
+    /// <remarks>
+    /// Primary ctor: Initialize all properties.
+    /// </remarks>
+    /// <param name="length">Length of this chunk.</param>
+    /// <param name="chunkType">Chunk type value.</param>
+    /// <param name="data">Chunk data.</param>
+    public class GlbChunk(int length, GlbChunkType chunkType, byte[] data)
     {
         /// <summary>
         /// Length of this chunk.
         /// </summary>
-        public int Length { get; set; }
+        public int Length { get; set; } = length;
         /// <summary>
         /// Chunk type value.
         /// </summary>
-        public GlbChunkType ChunkType { get; set; }
+        public GlbChunkType ChunkType { get; set; } = chunkType;
         /// <summary>
         /// Chunk data.
         /// </summary>
-        public byte[]? Data { get; set; }
-
-        /// <summary>
-        /// Initialize all properties.
-        /// </summary>
-        /// <param name="length">Length of this chunk.</param>
-        /// <param name="chunkType">Chunk type value.</param>
-        /// <param name="data">Chunk data.</param>
-        public GlbChunk(int length, GlbChunkType chunkType, byte[] data)
-        {
-            Length = length;
-            ChunkType = chunkType;
-            Data = data;
-        }
+        public byte[]? Data { get; set; } = data;
 
         /// <summary>
         /// Write all properties to specified <see cref="Stream"/>.

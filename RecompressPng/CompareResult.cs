@@ -9,16 +9,21 @@ namespace RecompressPng
     /// and <see cref="BitmapUtil.CompareImage(Bitmap, Bitmap)"/>
     /// and <see cref="BitmapUtil.CompareImage(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>.
     /// </summary>
-    public struct CompareResult
+    /// <remarks>
+    /// primary ctor: Initialize all properties.
+    /// </remarks>
+    /// <param name="type">Type of comparison result.</param>
+    /// <param name="optionalMessage">Optional message of comparison.</param>
+    public struct CompareResult(CompareResultType type, string? optionalMessage)
     {
         /// <summary>
         /// Type of comparison result.
         /// </summary>
-        public CompareResultType Type { get; set; }
+        public CompareResultType Type { get; set; } = type;
         /// <summary>
         /// Optional message of comparison.
         /// </summary>
-        public string? OptionalMessage { get; set; }
+        public string? OptionalMessage { get; set; } = optionalMessage;
 
         /// <summary>
         /// Initialize all properties.
@@ -27,17 +32,6 @@ namespace RecompressPng
         public CompareResult(CompareResultType type)
             : this(type, null)
         {
-        }
-
-        /// <summary>
-        /// Initialize all properties.
-        /// </summary>
-        /// <param name="type">Type of comparison result.</param>
-        /// <param name="optionalMessage">Optional message of comparison.</param>
-        public CompareResult(CompareResultType type, string? optionalMessage)
-        {
-            Type = type;
-            OptionalMessage = optionalMessage;
         }
 
         /// <summary>
