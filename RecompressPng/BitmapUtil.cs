@@ -15,16 +15,7 @@ namespace RecompressPng
         /// <summary>
         /// Memory comparator.
         /// </summary>
-        private static MemoryComparator _memoryComparator;
-
-
-        /// <summary>
-        /// Initialize <see cref="_memoryComparator"/>.
-        /// </summary>
-        static BitmapUtil()
-        {
-            _memoryComparator = new MemoryComparator();
-        }
+        private static readonly MemoryComparator _memoryComparator = new();
 
 
         /// <summary>
