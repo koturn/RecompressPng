@@ -10,8 +10,8 @@ using System.Security;
 #if NET_SIMD
 using System.Runtime.Intrinsics.X86;
 #else
-using NativeCodeSharp;
-using NativeCodeSharp.Intrinsics;
+using Koturn.NativeCode;
+using Koturn.NativeCode.Intrinsics;
 #endif  // NET_SIMD
 
 
