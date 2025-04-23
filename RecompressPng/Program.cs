@@ -266,6 +266,11 @@ namespace RecompressPng
 #else
                 + indent3 + $"--keep-chunks={string.Join(",", AllChunks)}");
 #endif  // NETCOREAPP2_0_OR_GREATER
+            ap.Add("keep-color-type",
+                "Keep original color type (RGB, RGBA, gray, gray+alpha or palette) and bit depth of the PNG.\n"
+                    + indent2 + "This results in a loss of compression opportunities,\n"
+                    + indent3 + "e.g. it will no longer convert a 4-channel RGBA image to 2-channel gray+alpha if the image only had translucent gray pixels.\n"
+                    + indent2 + "May be useful if a device does not support decoding PNGs of a particular color type.");
             ap.Add("lossy-transparent", "Remove colors behind alpha channel 0. No visual difference, removes hidden information.");
             ap.Add("lossy-8bit", "Convert 16-bit per channel images to 8-bit per channel.");
             ap.Add("zip-copy-and-shrink",
@@ -316,6 +321,7 @@ namespace RecompressPng
             zo.LossyTransparent = ap.GetValue<bool>("lossy-transparent");
             zo.Lossy8bit = ap.GetValue<bool>("lossy-8bit");
             zo.AutoFilterStrategy = !ap.GetValue<bool>("no-auto-filter-strategy");
+            zo.KeepColorType = ap.GetValue<bool>("keep-color-type");
             zo.UseZopfli = !ap.GetValue<bool>('q');
 
             if (ap.HasValue('f'))
@@ -390,6 +396,7 @@ namespace RecompressPng
             Console.WriteLine($"Lossy 8bit: {pngOptions.Lossy8bit}");
             Console.WriteLine($"ZopfliPNG Filter Strategies: {strategies}");
             Console.WriteLine($"Auto Filter Strategy: {pngOptions.AutoFilterStrategy}");
+            Console.WriteLine($"Keep Color Type: {pngOptions.KeepColorType}");
             Console.WriteLine($"Keep Chunks: {keepChunks}");
             Console.WriteLine($"Use Zopfli: {pngOptions.UseZopfli}");
             Console.WriteLine($"Number of Iterations: {pngOptions.NumIterations}");
