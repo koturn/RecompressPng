@@ -1,6 +1,8 @@
 RecompressPng
 =============
 
+[![.NET](https://github.com/koturn/RecompressPng/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/koturn/RecompressPng/actions/workflows/dotnet.yml)
+
 [![Test status](https://ci.appveyor.com/api/projects/status/pic7w57ggpfcs7qx/branch/main?svg=true)](https://ci.appveyor.com/project/koturn/recompresspng "AppVeyor | koturn/RecompressPng")
 
 PNG re-compressing tool with [Zopfli Compression Algorithm](https://github.com/google/zopfli "google/zopfli").
