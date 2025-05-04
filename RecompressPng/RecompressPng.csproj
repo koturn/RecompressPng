@@ -3,22 +3,23 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net9.0-windows;net481</TargetFrameworks>
-    <LangVersion>13</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WarningLevel>8</WarningLevel>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <LangVersion>13</LangVersion>
     <Title>RecompressPng</Title>
     <Version>1.7.0</Version>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
     <Copyright>Copyright (C) 2020 koturn All Rights Reserverd.</Copyright>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/koturn/RecompressPng</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/koturn/RecompressPng</RepositoryUrl>
     <PackageTags>Windows;zopfli;zopflipng</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
