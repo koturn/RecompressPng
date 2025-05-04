@@ -24,21 +24,13 @@ PNG re-compressing tool with [Zopfli Compression Algorithm](https://github.com/g
 First, pull all submodules.
 
 ```shell
-> git submodule update --init
+> git submodule update --init --recursive
 ```
 
 Second, build whole project.
 
 ```shell
-> msbuild /nologo /m /t:restore /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
-> msbuild /nologo /m /p:Configuration=Release;Platform="Any CPU" RecompressPng.sln
-```
-
-If you use x86 environment, please run the following command instead.
-
-```shell
-> msbuild /nologo /m /t:restore /p:Configuration=Release;Platform="x86" RecompressPng.sln
-> msbuild /nologo /m /p:Configuration=Release;Platform="x86" RecompressPng.sln
+> nmake
 ```
 
 
@@ -46,10 +38,10 @@ If you use x86 environment, please run the following command instead.
 
 The following libraries are managed as submodules.
 
-- [google/zopfli](https://github.com/google/zopfli "google/zopfli")
-- [koturn/ArgumentParserSharp](https://github.com/koturn/ArgumentParserSharp "koturn/ArgumentParserSharp")
-- [koturn/NativeCodeSharp](https://github.com/koturn/NativeCodeSharp "koturn/NativeCodeSharp")
-- [koturn/ZopfliSharp](https://github.com/koturn/NativeCodeSharp "koturn/ZopfliSharp")
+- [koturn/Koturn.CommandLine](https://github.com/koturn/Koturn.CommandLine "koturn/Koturn.CommandLine")
+- [koturn/Koturn.NativeCode](https://github.com/koturn/Koturn.NativeCode "koturn/Koturn.NativeCode")
+- [koturn/Koturn.Zopfli](https://github.com/koturn/Koturn.Zopfli "koturn/Koturn.Zopfli")
+    - [google/zopfli](https://github.com/google/zopfli "google/zopfli")
 
 
 ## LICENSE
