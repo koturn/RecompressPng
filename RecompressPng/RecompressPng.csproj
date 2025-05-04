@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <LangVersion>13</LangVersion>
     <Title>RecompressPng</Title>
-    <Version>1.7.0</Version>
+    <Version>1.7.1</Version>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
