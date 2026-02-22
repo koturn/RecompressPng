@@ -11,7 +11,7 @@
     <PublishTrimmed Condition="'$(TargetFramework)'!='net481'">True</PublishTrimmed>
     <PublishAot Condition="'$(TargetFramework)'!='net481'">True</PublishAot>
     <Title>RecompressPng</Title>
-    <Version>1.7.1</Version>
+    <Version>1.7.2</Version>
     <Authors>koturn</Authors>
     <Company>koturn</Company>
     <Description>PNG re-compressing tool with Zopfli Compression Algorithm.</Description>
