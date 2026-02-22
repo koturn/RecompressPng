@@ -850,7 +850,7 @@ namespace RecompressPng
         }
 
         /// <summary>
-        /// Re-compress all PNG files in zip archive using "zopfli" algorithm.
+        /// Re-compress all PNG files in the GLB file using "zopfli" algorithm.
         /// </summary>
         /// <param name="srcGlbFilePath">Source GLB file.</param>
         /// <param name="dstGlbFilePath">Destination GLB file.</param>
