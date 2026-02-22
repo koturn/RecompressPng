@@ -436,7 +436,8 @@ namespace RecompressPng
                 File.Delete(dstZipFilePath);
             }
 
-            int nProcPngFiles = 0;
+            int pngCount = 0;
+            int replaceCount = 0;
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
             var errorImageIndexNameList = new List<ImageIndexNamePair>();
@@ -487,7 +488,7 @@ namespace RecompressPng
                             return;
                         }
 
-                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var procIndex = Interlocked.Increment(ref pngCount);
                         var sw = Stopwatch.StartNew();
                         try
                         {
@@ -517,16 +518,16 @@ namespace RecompressPng
                                 pngOptions,
                                 execOptions.Verbose);
 
-                            var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                                ? SpanUtil.CreateSpan(compressedData)
-                                : data.AsSpan();
+                            var shouldReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
+                            var pngDataSpan = shouldReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan();
                             if (execOptions.IsModifyPng)
                             {
                                 pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
+                                shouldReplace = true;
                             }
 
                             // is not dry-run.
-                            if (dstArchive is not null && dstLock is not null)
+                            if (shouldReplace && dstArchive is not null && dstLock is not null)
                             {
                                 CreateEntryAndWriteData(
                                     dstArchive,
@@ -534,6 +535,7 @@ namespace RecompressPng
                                     pngDataSpan,
                                     dstLock,
                                     execOptions.IsKeepTimestamp ? srcEntry.LastWriteTime : null);
+                                Interlocked.Increment(ref replaceCount);
                             }
 
                             var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
@@ -580,17 +582,24 @@ namespace RecompressPng
 
             if (execOptions.IsOverwrite)
             {
-                File.Delete(srcZipFilePath);
-                File.Move(dstZipFilePath, srcZipFilePath);
+                if (replaceCount == 0)
+                {
+                    File.Delete(dstZipFilePath);
+                }
+                else
+                {
+                    File.Delete(srcZipFilePath);
+                    File.Move(dstZipFilePath, srcZipFilePath);
+                }
             }
 
             Console.WriteLine("- - -");
-            if (nProcPngFiles == 0)
+            if (pngCount == 0)
             {
                 _logger.Info("No PNG file were processed.");
                 return;
             }
-            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("All PNG files were proccessed ({0} files).", pngCount);
             if (execOptions.IsDryRun)
             {
                 _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
@@ -613,7 +622,7 @@ namespace RecompressPng
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, pngCount);
                     foreach (var (index, name) in diffImageIndexNameList)
                     {
                         Console.WriteLine($"Different image [{index}]: {name}");
@@ -649,16 +658,17 @@ namespace RecompressPng
 
             File.Copy(srcZipFilePath, dstZipFilePath, true);
 
-            int nProcPngFiles = 0;
+            int pngCount = 0;
             var srcFileSize = new FileInfo(srcZipFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
             var errorImageIndexNameList = new List<ImageIndexNamePair>();
             var totalSw = Stopwatch.StartNew();
 
+            var deleteEntryList = new List<ZipArchiveEntry>();
+
             using (var zipArchive = ZipFile.Open(dstZipFilePath, ZipArchiveMode.Update))
             {
                 var lockObj = new Lock();
-                var deleteEntryList = new List<ZipArchiveEntry>();
 
                 Parallel.ForEach(
                     Partitioner.Create(zipArchive.Entries, true),
@@ -671,7 +681,7 @@ namespace RecompressPng
                             return;
                         }
 
-                        var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                        var procIndex = Interlocked.Increment(ref pngCount);
                         var sw = Stopwatch.StartNew();
                         try
                         {
@@ -702,15 +712,15 @@ namespace RecompressPng
                                 pngOptions,
                                 execOptions.Verbose);
 
-                            var isUpdateNeeded = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
-                            var pngDataSpan = isUpdateNeeded ? SpanUtil.CreateSpan(compressedData) : data.AsSpan(0, dataLength);
+                            var shouldReplace = (long)compressedData.ByteLength < dataLength || execOptions.IsReplaceForce;
+                            var pngDataSpan = shouldReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan(0, dataLength);
                             if (execOptions.IsModifyPng)
                             {
-                                isUpdateNeeded = true;
                                 pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions, srcEntry.LastWriteTime.DateTime);
+                                shouldReplace = true;
                             }
 
-                            if (!execOptions.IsDryRun && isUpdateNeeded)
+                            if (shouldReplace && !execOptions.IsDryRun)
                             {
                                 CreateEntryAndWriteData(
                                     zipArchive,
@@ -770,23 +780,26 @@ namespace RecompressPng
                 }
             }
 
-            if (nProcPngFiles == 0)
+            if (execOptions.IsOverwrite)
             {
-                File.Delete(dstZipFilePath);
-            }
-            else if (execOptions.IsOverwrite)
-            {
-                File.Delete(srcZipFilePath);
-                File.Move(dstZipFilePath, srcZipFilePath);
+                if (deleteEntryList.Count == 0)
+                {
+                    File.Delete(dstZipFilePath);
+                }
+                else
+                {
+                    File.Delete(srcZipFilePath);
+                    File.Move(dstZipFilePath, srcZipFilePath);
+                }
             }
 
             Console.WriteLine("- - -");
-            if (nProcPngFiles == 0)
+            if (pngCount == 0)
             {
                 _logger.Info("No PNG file were processed.");
                 return;
             }
-            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("All PNG files were proccessed ({0} files).", pngCount);
             if (execOptions.IsDryRun)
             {
                 _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
@@ -810,7 +823,7 @@ namespace RecompressPng
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, pngCount);
                     foreach (var (index, name) in diffImageIndexNameList)
                     {
                         Console.WriteLine($"Different image [{index}]: {name}");
@@ -860,7 +873,8 @@ namespace RecompressPng
                 _logger.Warn($"The size described in the buffers[0].byteLength in the glTF json differs from the size of data of second chunk. Expected: {buffer0Length} Bytes, Actual: {glbChunks[1].Length} Bytes");
             }
 
-            int nProcPngFiles = 0;
+            int pngCount = 0;
+            int replaceCount = 0;
             var srcFileSize = new FileInfo(srcGlbFilePath).Length;
             var diffImageIndexNameList = new List<ImageIndexNamePair>();
             var errorImageIndexNameList = new List<ImageIndexNamePair>();
@@ -884,7 +898,7 @@ namespace RecompressPng
                     }
 
                     var sw = Stopwatch.StartNew();
-                    var procIndex = Interlocked.Increment(ref nProcPngFiles);
+                    var procIndex = Interlocked.Increment(ref pngCount);
 
                     var displayName = $"[{imageIndex.Index}] {imageIndex.Name}";
                     try
@@ -907,17 +921,18 @@ namespace RecompressPng
                             pngOptions,
                             execOptions.Verbose);
 
-                        var pngDataSpan = ((long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce)
-                            ? SpanUtil.CreateSpan(compressedData)
-                            : data.AsSpan();
+                        var shouldReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
+                        var pngDataSpan = shouldReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan();
                         if (execOptions.IsModifyPng)
                         {
                             pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions);
+                            shouldReplace = true;
                         }
 
-                        if (!execOptions.IsDryRun)
+                        if (shouldReplace && !execOptions.IsDryRun)
                         {
                             binaryBuffers[imageIndex.Index] = pngDataSpan.ToArray();
+                            Interlocked.Increment(ref replaceCount);
                         }
 
                         var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
@@ -1032,18 +1047,25 @@ namespace RecompressPng
 
                 if (execOptions.IsOverwrite)
                 {
-                    File.Delete(srcGlbFilePath);
-                    File.Move(dstGlbFilePath, srcGlbFilePath);
+                    if (replaceCount == 0)
+                    {
+                        File.Delete(dstGlbFilePath);
+                    }
+                    else
+                    {
+                        File.Delete(srcGlbFilePath);
+                        File.Move(dstGlbFilePath, srcGlbFilePath);
+                    }
                 }
             }
 
             Console.WriteLine("- - -");
-            if (nProcPngFiles == 0)
+            if (pngCount == 0)
             {
                 _logger.Info("No PNG file were processed.");
                 return;
             }
-            _logger.Info("All PNG files were proccessed ({0} files).", nProcPngFiles);
+            _logger.Info("All PNG files were proccessed ({0} files).", pngCount);
             if (execOptions.IsDryRun)
             {
                 _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
@@ -1066,7 +1088,7 @@ namespace RecompressPng
                 }
                 else
                 {
-                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, nProcPngFiles);
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, pngCount);
                     foreach (var (index, name) in diffImageIndexNameList)
                     {
                         Console.WriteLine($"Different image [{index}]: {name}");
