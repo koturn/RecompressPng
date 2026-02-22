@@ -3,11 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0-windows;net481</TargetFrameworks>
+    <LangVersion>14</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WarningLevel>8</WarningLevel>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
-    <LangVersion>14</LangVersion>
+    <PublishTrimmed Condition="'$(TargetFramework)'!='net481'">True</PublishTrimmed>
+    <PublishAot Condition="'$(TargetFramework)'!='net481'">True</PublishAot>
     <Title>RecompressPng</Title>
     <Version>1.7.1</Version>
     <Authors>koturn</Authors>
