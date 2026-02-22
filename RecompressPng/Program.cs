@@ -27,6 +27,7 @@ using Koturn.Zopfli;
 using Koturn.Zopfli.Checksums;
 using Koturn.Zopfli.Enums;
 using RecompressPng.Glb;
+using RecompressPng.Icon;
 using RecompressPng.Internals;
 
 #if !NET9_0_OR_GREATER
@@ -78,6 +79,14 @@ namespace RecompressPng
         /// Magic number byte sequence of glTF file.
         /// </summary>
         private static readonly byte[] GltfMagicBytes = [(byte)'g', (byte)'l', (byte)'T', (byte)'F'];
+        /// <summary>
+        /// First byte sequences of the .ico file.
+        /// </summary>
+        private static readonly byte[] IcoSignature = [0x00, 0x00, 0x01, 0x00];
+        /// <summary>
+        /// First byte sequences of the .cur file.
+        /// </summary>
+        private static readonly byte[] CurSignature = [0x00, 0x00, 0x02, 0x00];
         /// <summary>
         /// All chunks to keep when "--keep-all-chunks" specified.
         /// </summary>
@@ -145,6 +154,17 @@ namespace RecompressPng
                         else
                         {
                             RecompressPngInGlb(target, null, pngOptions, execOptions);
+                        }
+                    }
+                    else if (IsIconFile(target))
+                    {
+                        if (execOptions.IsCountOnly)
+                        {
+                            CountPngInIcon(target);
+                        }
+                        else
+                        {
+                            RecompressPngInIcon(target, null, pngOptions, execOptions);
                         }
                     }
                     else
@@ -1119,6 +1139,195 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Re-compress all PNG files in icon file using "zopfli" algorithm.
+        /// </summary>
+        /// <param name="srcIconFilePath">Source icon file.</param>
+        /// <param name="dstIconFilePath">Destination GLB file.</param>
+        /// <param name="pngOptions">Options for zopflipng.</param>
+        /// <param name="execOptions">Options for execution.</param>
+        private static void RecompressPngInIcon(string srcIconFilePath, string? dstIconFilePath, ZopfliPngOptions pngOptions, ExecuteOptions execOptions)
+        {
+            dstIconFilePath ??= Path.Combine(
+                Path.GetDirectoryName(srcIconFilePath) ?? ".",
+                Path.GetFileNameWithoutExtension(srcIconFilePath) + ".zopfli" + Path.GetExtension(srcIconFilePath));
+
+            if (File.Exists(dstIconFilePath))
+            {
+                File.Delete(dstIconFilePath);
+            }
+
+            var iconData = IconData.Load(srcIconFilePath);
+
+            int pngCount = 0;
+            int replaceCount = 0;
+            var srcFileSize = new FileInfo(srcIconFilePath).Length;
+            var diffImageIndexNameList = new List<ImageIndexNamePair>();
+            var errorImageIndexNameList = new List<ImageIndexNamePair>();
+            var totalSw = Stopwatch.StartNew();
+
+            // Overwrite options.
+            pngOptions.KeepColorType = true;
+            execOptions = (ExecuteOptions)execOptions.Clone();
+            execOptions.TextCreationTimeFormat = null;
+            execOptions.IsAddTimeChunk = false;
+
+            Parallel.ForEach(
+                Partitioner.Create(iconData.IconImageEntryList.Select((iconImageEntry, index) => (iconImageEntry, index))),
+                new ParallelOptions() { MaxDegreeOfParallelism = execOptions.NumberOfThreads },
+                entryIndexPair =>
+                {
+                    var iconImageEntry = entryIndexPair.iconImageEntry;
+                    var data = iconImageEntry.ImageData;
+                    if (!HasPngSignature(data))
+                    {
+                        return;
+                    }
+
+                    var index = entryIndexPair.index;
+
+                    var sw = Stopwatch.StartNew();
+                    var procIndex = Interlocked.Increment(ref pngCount);
+
+                    var displayName = $"[{index}]";
+                    try
+                    {
+                        if (execOptions.IgnoreSingleIdatSize >= 0)
+                        {
+                            var (count, totalIdatSize) = CountAndGetTotalSizeOfIdatChunks(data);
+                            if (count == 1 && totalIdatSize >= execOptions.IgnoreSingleIdatSize)
+                            {
+                                _logger.Info("[{0}] Compress {1} ... Ignored (Single IDAT chunk)", procIndex, displayName);
+                                return;
+                            }
+                        }
+
+                        _logger.Info("[{0}] Compress {1} ...", procIndex, displayName);
+
+                        // Take a long time
+                        using var compressedData = ZopfliPng.OptimizePngUnmanaged(
+                            data,
+                            pngOptions,
+                            execOptions.Verbose);
+
+                        var shouldReplace = (long)compressedData.ByteLength < data.LongLength || execOptions.IsReplaceForce;
+                        var pngDataSpan = shouldReplace ? SpanUtil.CreateSpan(compressedData) : data.AsSpan();
+                        if (execOptions.IsModifyPng)
+                        {
+                            pngDataSpan = AddAdditionalChunks(pngDataSpan, execOptions);
+                            shouldReplace = true;
+                        }
+
+                        if (shouldReplace && !execOptions.IsDryRun)
+                        {
+                            iconImageEntry.ImageData = pngDataSpan.ToArray();
+                            Interlocked.Increment(ref replaceCount);
+                        }
+
+                        var logLevel = pngDataSpan.Length < data.Length ? LogLevel.Info : LogLevel.Warn;
+                        var verifyResultMsg = "";
+                        if (execOptions.IsVerifyImage)
+                        {
+                            var result = BitmapUtil.CompareImage(data, pngDataSpan);
+                            verifyResultMsg = $" ({result})";
+                            if (result.Type != CompareResultType.Same)
+                            {
+                                logLevel = LogLevel.Warn;
+                                lock (((ICollection)diffImageIndexNameList).SyncRoot)
+                                {
+                                    diffImageIndexNameList.Add(new ImageIndexNamePair(procIndex, displayName));
+                                }
+                            }
+                        }
+                        _logger.Log(
+                            logLevel,
+                            "[{0}] Compress {1} done: {2:F3} MiB -> {3:F3} MiB (deflated {4:F2}%, {5:F3} seconds){6}",
+                            procIndex,
+                            displayName,
+                            ToMiB(data.LongLength),
+                            ToMiB(pngDataSpan.Length),
+                            CalcDeflatedRate(data.LongLength, pngDataSpan.Length) * 100.0,
+                            sw.ElapsedMilliseconds / 1000.0,
+                            verifyResultMsg);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(
+                            ex,
+                            "[{0}] Compress {1} failed:",
+                            procIndex,
+                            displayName);
+                        lock (((ICollection)errorImageIndexNameList).SyncRoot)
+                        {
+                            errorImageIndexNameList.Add(new ImageIndexNamePair(procIndex, displayName));
+                        }
+                    }
+                });
+
+            if (!execOptions.IsDryRun)
+            {
+                if (!execOptions.IsOverwrite)
+                {
+                    iconData.Save(dstIconFilePath);
+                }
+                else if (replaceCount > 0)
+                {
+                    iconData.Save(dstIconFilePath);
+#if NETCOREAPP3_0_OR_GREATER
+                    File.Move(dstIconFilePath, srcIconFilePath, true);
+#else
+                    File.Delete(srcIconFilePath);
+                    File.Move(dstIconFilePath, srcIconFilePath);
+#endif  // NETCOREAPP3_0_OR_GREATER
+                }
+            }
+
+            Console.WriteLine("- - -");
+            if (pngCount == 0)
+            {
+                _logger.Info("No PNG file were processed.");
+                return;
+            }
+            _logger.Info("All PNG files were proccessed ({0} files).", pngCount);
+            if (execOptions.IsDryRun)
+            {
+                _logger.Info("Elapsed time: {0:F3} seconds.", totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            else
+            {
+                var dstFileSize = new FileInfo(execOptions.IsOverwrite ? srcIconFilePath : dstIconFilePath).Length;
+                _logger.Info(
+                    "{0:F3} MiB -> {1:F3} MiB (deflated {2:F2}%, {3:F3} seconds)",
+                    ToMiB(srcFileSize),
+                    ToMiB(dstFileSize),
+                    CalcDeflatedRate(srcFileSize, dstFileSize) * 100.0,
+                    totalSw.ElapsedMilliseconds / 1000.0);
+            }
+            if (execOptions.IsVerifyImage)
+            {
+                if (diffImageIndexNameList.Count == 0)
+                {
+                    _logger.Info("All the image data before and after re-compressing are the same.");
+                }
+                else
+                {
+                    _logger.Warn("{0} / {1} PNG files are different image.", diffImageIndexNameList.Count, pngCount);
+                    foreach (var (index, name) in diffImageIndexNameList)
+                    {
+                        Console.WriteLine($"Different image [{index}]: {name}");
+                    }
+                }
+            }
+            if (errorImageIndexNameList.Count > 0)
+            {
+                _logger.Error("There are {0} PNG files that encountered errors during processing.", errorImageIndexNameList.Count);
+                foreach (var (index, name) in errorImageIndexNameList)
+                {
+                    Console.WriteLine($"Error image [{index}]: {name}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Re-compress all PNG files in directory using "zopfli" algorithm.
         /// </summary>
         /// <param name="srcDirPath">Source directory.</param>
@@ -1349,6 +1558,38 @@ namespace RecompressPng
         }
 
         /// <summary>
+        /// Count PNG files in the icon file.
+        /// </summary>
+        /// <param name="iconFilePath">Target icon file.</param>
+        private static void CountPngInIcon(string iconFilePath)
+        {
+            var iconData = IconData.Load(iconFilePath);
+
+            var totalPngFiles = 0;
+            var totalPngFileSize = 0L;
+
+            var index = -1;
+            foreach (var iconImageEntry in iconData.IconImageEntryList)
+            {
+                index++;
+
+                var data = iconImageEntry.ImageData;
+                if (!HasPngSignature(data))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"[{index}]: {ToMiB(data.Length):F3} MiB");
+                totalPngFiles++;
+                totalPngFileSize += data.Length;
+            }
+
+            Console.WriteLine("- - -");
+            Console.WriteLine($"The number of target PNG files: {totalPngFiles}");
+            Console.WriteLine($"Total target PNG file size: {ToMiB(totalPngFileSize):F3} MiB");
+        }
+
+        /// <summary>
         /// Count PNG files and print its full name in the directory.
         /// </summary>
         /// <param name="dirPath">Target directory path.</param>
@@ -1489,6 +1730,74 @@ namespace RecompressPng
             for (int i = 0; i < gltfMagicBytes.Length; i++)
             {
                 if (data[i] != gltfMagicBytes[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// <para>Identify icon file (.ico or .cur) or not.</para>
+        /// <para>Just determine if the first four bytes are [0x00, 0x00, 0x01, 0x00] or [0x00, 0x00, 0x02, 0x00].</para>
+        /// </summary>
+        /// <param name="iconFilePath">Target icon file path,</param>
+        /// <returns>True if specified file is a icon file, otherwise false.</returns>
+        private static bool IsIconFile(string iconFilePath)
+        {
+#if NETCOREAPP2_1_OR_GREATER
+            Span<byte> buffer = stackalloc byte[IcoSignature.Length];
+#else
+            var buffer = new byte[GltfMagicBytes.Length];
+#endif  // NETCOREAPP2_1_OR_GREATER
+
+            using (var fs = File.OpenRead(iconFilePath))
+            {
+#if NETCOREAPP2_1_OR_GREATER
+                if (fs.Read(buffer) < buffer.Length)
+#else
+                if (fs.Read(buffer, 0, buffer.Length) < buffer.Length)
+#endif  // NETCOREAPP2_1_OR_GREATER
+                {
+                    return false;
+                }
+            }
+            return HasIconSignature(buffer);
+        }
+
+        /// <summary>
+        /// Identify the specified binary data has a .ico or .cur signature or not.
+        /// </summary>
+        /// <param name="data">Binary data</param>
+        /// <returns>True if the specified binary has a .ico or .cur signature, otherwise false.</returns>
+        private static bool HasIconSignature(ReadOnlySpan<byte> data)
+        {
+            var signature = IcoSignature;
+            if (data.Length < signature.Length)
+            {
+                return false;
+            }
+
+            var isIcoFile = true;
+            for (int i = 0; i < signature.Length; i++)
+            {
+                if (data[i] != signature[i])
+                {
+                    isIcoFile = false;
+                    break;
+                }
+            }
+
+            if (isIcoFile)
+            {
+                return true;
+            }
+
+            signature = CurSignature;
+            for (int i = 0; i < signature.Length; i++)
+            {
+                if (data[i] != signature[i])
                 {
                     return false;
                 }
