@@ -588,8 +588,12 @@ namespace RecompressPng
                 }
                 else
                 {
+#if NETCOREAPP3_0_OR_GREATER
+                    File.Move(dstZipFilePath, srcZipFilePath, true);
+#else
                     File.Delete(srcZipFilePath);
                     File.Move(dstZipFilePath, srcZipFilePath);
+#endif  // NETCOREAPP3_0_OR_GREATER
                 }
             }
 
@@ -788,8 +792,13 @@ namespace RecompressPng
                 }
                 else
                 {
+#if NETCOREAPP3_0_OR_GREATER
+                    File.Move(dstZipFilePath, srcZipFilePath, true);
+#else
                     File.Delete(srcZipFilePath);
                     File.Move(dstZipFilePath, srcZipFilePath);
+#endif  // NETCOREAPP3_0_OR_GREATER
+
                 }
             }
 
@@ -975,7 +984,7 @@ namespace RecompressPng
                     }
                 });
 
-            if (!execOptions.IsDryRun)
+            if (!execOptions.IsDryRun && (!execOptions.IsOverwrite || replaceCount > 0))
             {
                 int nOffset = 0;
                 for (int i = 0, cnt = binaryBuffers.Count; i < cnt; i++)
@@ -1047,15 +1056,12 @@ namespace RecompressPng
 
                 if (execOptions.IsOverwrite)
                 {
-                    if (replaceCount == 0)
-                    {
-                        File.Delete(dstGlbFilePath);
-                    }
-                    else
-                    {
-                        File.Delete(srcGlbFilePath);
-                        File.Move(dstGlbFilePath, srcGlbFilePath);
-                    }
+#if NETCOREAPP3_0_OR_GREATER
+                    File.Move(dstGlbFilePath, srcGlbFilePath, true);
+#else
+                    File.Delete(srcGlbFilePath);
+                    File.Move(dstGlbFilePath, srcGlbFilePath);
+#endif  // NETCOREAPP3_0_OR_GREATER
                 }
             }
 
